@@ -5,7 +5,11 @@ import {
   getClientIpHash,
 } from "@/lib/server-store";
 import { parseHandle } from "@/lib/tree-config";
-import { createMessageSchema, formatZodError } from "@/lib/validation";
+import {
+  createMessageSchema,
+  formatZodError,
+  idempotencyKeySchema,
+} from "@/lib/validation";
 
 export async function POST(
   request: Request,
@@ -18,6 +22,19 @@ export async function POST(
       { ok: false, error: "Tree not found." },
       { status: 404, headers: { "Cache-Control": "no-store" } },
     );
+  }
+
+  let idempotencyKey: string | undefined;
+  const rawIdem = request.headers.get("idempotency-key");
+  if (rawIdem !== null) {
+    const parsedIdem = idempotencyKeySchema.safeParse(rawIdem);
+    if (!parsedIdem.success) {
+      return NextResponse.json(
+        { ok: false, error: formatZodError(parsedIdem.error) },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    idempotencyKey = parsedIdem.data;
   }
 
   let rawPayload: unknown;
@@ -100,7 +117,9 @@ export async function POST(
   const bodyText = parsed.data.body;
   const ornamentType = parsed.data.ornamentType ?? null;
 
-  const result = await addAnonymousMessage(cleanHandle, bodyText, ornamentType);
+  const result = await addAnonymousMessage(cleanHandle, bodyText, ornamentType, {
+    idempotencyKey,
+  });
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error },

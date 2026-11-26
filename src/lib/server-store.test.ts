@@ -1,8 +1,10 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import robots from "../app/robots";
+import { FileTreeStore, KvTreeStore, MemoryTreeStore } from "./store";
+import { defaultTreeConfig } from "./tree-config";
 import {
   addAnonymousMessage,
   checkRateLimit,
@@ -279,5 +281,338 @@ describe("SSR privacy sanitization and robots policy", () => {
 
     const realRecord = await getTreeRecord("noodlestack");
     expect(realRecord?.messages).toHaveLength(0);
+  });
+});
+
+const hasKvCredentials = Boolean(
+  (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) &&
+    (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN),
+);
+
+describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", () => {
+  it("persists 50 concurrent appendMessage calls with unique 1..50 seq on MemoryTreeStore", async () => {
+    const trees = new Map();
+    const idem = new Map();
+    const mem = new MemoryTreeStore(trees, idem);
+    const now = new Date().toISOString();
+    const created = await mem.createTreeIfAbsent({
+      handle: "mem50",
+      ownerTokenHash: "hash123",
+      config: defaultTreeConfig("mem50"),
+      createdAt: now,
+      updatedAt: now,
+    });
+    expect(created).toBe(true);
+
+    const results = await Promise.all(
+      Array.from({ length: 50 }, (_, idx) =>
+        mem.appendMessage(
+          "mem50",
+          { body: `Concurrent wish #${idx + 1}`, ornamentType: idx % 16 },
+          { cap: 1000 },
+        ),
+      ),
+    );
+    expect(results.every((r) => r.ok)).toBe(true);
+
+    const list = await mem.listMessages("mem50");
+    expect(list).toHaveLength(50);
+    const seqs = list.map((m) => m.seq).sort((a, b) => a - b);
+    expect(seqs).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+  });
+
+  it("persists 50 concurrent appendMessage calls with unique 1..50 seq on FileTreeStore", async () => {
+    const trees = new Map();
+    const idem = new Map();
+    const fileStore = new FileTreeStore(
+      () => tempStoreFile,
+      trees,
+      idem,
+      () => {},
+    );
+    const now = new Date().toISOString();
+    expect(
+      await fileStore.createTreeIfAbsent({
+        handle: "file50",
+        ownerTokenHash: "hash456",
+        config: defaultTreeConfig("file50"),
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ).toBe(true);
+
+    const results = await Promise.all(
+      Array.from({ length: 50 }, (_, idx) =>
+        fileStore.appendMessage(
+          "file50",
+          { body: `File wish #${idx + 1}`, ornamentType: idx % 16 },
+          { cap: 1000 },
+        ),
+      ),
+    );
+    expect(results.every((r) => r.ok)).toBe(true);
+
+    const list = await fileStore.listMessages("file50");
+    expect(list).toHaveLength(50);
+    const seqs = list.map((m) => m.seq).sort((a, b) => a - b);
+    expect(seqs).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+  });
+
+  it.skipIf(!hasKvCredentials)(
+    "persists 50 concurrent appendMessage calls on live KvTreeStore (skipped without KV creds)",
+    async () => {
+      const kv = new KvTreeStore(() => ({
+        url: (
+          process.env.UPSTASH_REDIS_REST_URL ||
+          process.env.KV_REST_API_URL ||
+          ""
+        ).replace(/\/$/, ""),
+        token:
+          process.env.UPSTASH_REDIS_REST_TOKEN ||
+          process.env.KV_REST_API_TOKEN ||
+          "",
+      }));
+      const handle = `kvtest_${Date.now().toString(36).slice(-6)}`;
+      const now = new Date().toISOString();
+      await kv.createTreeIfAbsent({
+        handle,
+        ownerTokenHash: "hashkv",
+        config: defaultTreeConfig(handle),
+        createdAt: now,
+        updatedAt: now,
+      });
+      const results = await Promise.all(
+        Array.from({ length: 50 }, (_, idx) =>
+          kv.appendMessage(
+            handle,
+            { body: `KV wish #${idx + 1}`, ornamentType: idx % 16 },
+            { cap: 1000 },
+          ),
+        ),
+      );
+      expect(results.every((r) => r.ok)).toBe(true);
+      const list = await kv.listMessages(handle);
+      expect(list.map((m) => m.seq).sort((a, b) => a - b)).toEqual(
+        Array.from({ length: 50 }, (_, i) => i + 1),
+      );
+    },
+  );
+
+  it("allows only one winner for two concurrent claims of the same handle", async () => {
+    const [a, b] = await Promise.all([
+      claimOrVerifyTree("raced_tree", null, { displayName: "First" }),
+      claimOrVerifyTree("raced_tree", null, { displayName: "Second" }),
+    ]);
+
+    const wins = [a, b].filter((r) => r.ok);
+    const losses = [a, b].filter((r) => !r.ok);
+    expect(wins).toHaveLength(1);
+    expect(losses).toHaveLength(1);
+    if (!losses[0].ok) {
+      expect(losses[0].status).toBe(409);
+    }
+  });
+
+  it("deduplicates repeated idempotencyKey without creating duplicate ornaments", async () => {
+    await claimOrVerifyTree("idem_tree", null, {});
+    const first = await addAnonymousMessage("idem_tree", "Warm wishes!", 2, {
+      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+    });
+    const second = await addAnonymousMessage("idem_tree", "Warm wishes!", 2, {
+      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.ornament.id).toBe(first.ornament.id);
+      expect(second.totalVisible).toBe(1);
+    }
+    const rec = await getTreeRecord("idem_tree");
+    expect(rec?.messages).toHaveLength(1);
+  });
+
+  it("enforces HOHO_MAX_MESSAGES_PER_TREE cap with 429 response", async () => {
+    const prevCap = process.env.HOHO_MAX_MESSAGES_PER_TREE;
+    process.env.HOHO_MAX_MESSAGES_PER_TREE = "3";
+    try {
+      await claimOrVerifyTree("capped_tree", null, {});
+      for (let i = 1; i <= 3; i += 1) {
+        const res = await addAnonymousMessage("capped_tree", `Message ${i}`, 1);
+        expect(res.ok).toBe(true);
+      }
+      const fourth = await addAnonymousMessage("capped_tree", "Message 4", 1);
+      expect(fourth.ok).toBe(false);
+      if (!fourth.ok) {
+        expect(fourth.status).toBe(429);
+        expect(fourth.error).toBe("This tree is full for now.");
+      }
+    } finally {
+      if (prevCap === undefined) delete process.env.HOHO_MAX_MESSAGES_PER_TREE;
+      else process.env.HOHO_MAX_MESSAGES_PER_TREE = prevCap;
+    }
+  });
+
+  it("rejects anonymous messages to unclaimed handles and legacy empty-hash records", async () => {
+    const missing = await addAnonymousMessage("nobody_here", "Hello!", 0);
+    expect(missing).toEqual({
+      ok: false,
+      status: 404,
+      error: "Tree not found.",
+    });
+    expect(await getTreeRecord("nobody_here")).toBeNull();
+
+    // Seed a legacy unclaimed record directly into FileTreeStore
+    const trees = new Map();
+    const idem = new Map();
+    const fileStore = new FileTreeStore(
+      () => tempStoreFile,
+      trees,
+      idem,
+      () => {},
+    );
+    await fs.mkdir(tempDir, { recursive: true });
+    await fs.writeFile(
+      tempStoreFile,
+      JSON.stringify({
+        trees: {
+          legacyunclaimed: {
+            handle: "legacyunclaimed",
+            ownerTokenHash: "",
+            config: defaultTreeConfig("legacyunclaimed"),
+            messages: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      }),
+      "utf8",
+    );
+    const appendLegacy = await fileStore.appendMessage(
+      "legacyunclaimed",
+      { body: "Should not land", ornamentType: 1 },
+      { cap: 1000 },
+    );
+    expect(appendLegacy).toEqual({ ok: false, reason: "missing" });
+  });
+
+  it("lazily migrates a legacy hoho:tree:{h} KV blob into hoho:v2 keys with 7-day EXPIRE", async () => {
+    const kvState = new Map<string, unknown>();
+    const hashes = new Map<string, Map<string, string>>();
+    const zsets = new Map<string, Map<string, number>>();
+    const sets = new Map<string, Set<string>>();
+    const expires = new Map<string, number>();
+
+    kvState.set(
+      "hoho:tree:legacykv",
+      JSON.stringify({
+        handle: "legacykv",
+        ownerTokenHash: "deadbeef1234",
+        config: defaultTreeConfig("legacykv"),
+        createdAt: "2026-12-01T00:00:00.000Z",
+        updatedAt: "2026-12-01T00:00:00.000Z",
+        messages: [
+          {
+            id: "msg-1",
+            seq: 4,
+            body: "Old holiday cheer",
+            ornamentType: 2,
+            colorIdx: 0,
+            seed: 42,
+            status: "visible",
+            readAt: null,
+            createdAt: "2026-12-01T01:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const runCmd = (args: Array<string | number>): unknown => {
+      const cmd = String(args[0]).toUpperCase();
+      const key = String(args[1]);
+      if (cmd === "GET") return kvState.get(key) ?? null;
+      if (cmd === "SET") {
+        const val = String(args[2]);
+        const hasNx = args.includes("NX");
+        if (hasNx && kvState.has(key)) return null;
+        kvState.set(key, val);
+        return "OK";
+      }
+      if (cmd === "HSET") {
+        const h = hashes.get(key) ?? new Map<string, string>();
+        for (let i = 2; i < args.length; i += 2) {
+          h.set(String(args[i]), String(args[i + 1]));
+        }
+        hashes.set(key, h);
+        return 1;
+      }
+      if (cmd === "ZADD") {
+        const z = zsets.get(key) ?? new Map<string, number>();
+        for (let i = 2; i < args.length; i += 2) {
+          z.set(String(args[i + 1]), Number(args[i]));
+        }
+        zsets.set(key, z);
+        return 1;
+      }
+      if (cmd === "ZRANGE") {
+        const z = zsets.get(key) ?? new Map<string, number>();
+        return [...z.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+      }
+      if (cmd === "HMGET") {
+        const h = hashes.get(key) ?? new Map<string, string>();
+        return args.slice(2).map((field) => h.get(String(field)) ?? null);
+      }
+      if (cmd === "SADD") {
+        const s = sets.get(key) ?? new Set<string>();
+        for (let i = 2; i < args.length; i += 1) s.add(String(args[i]));
+        sets.set(key, s);
+        return s.size;
+      }
+      if (cmd === "SCARD") return (sets.get(key) ?? new Set()).size;
+      if (cmd === "ZCARD") return (zsets.get(key) ?? new Map()).size;
+      if (cmd === "EXPIRE") {
+        expires.set(key, Number(args[2]));
+        return 1;
+      }
+      return null;
+    };
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const url = String(input);
+        const body = JSON.parse(String(init?.body ?? "[]"));
+        if (url.endsWith("/pipeline")) {
+          const results = (body as Array<Array<string | number>>).map((cmd) => ({
+            result: runCmd(cmd),
+          }));
+          return new Response(JSON.stringify(results), { status: 200 });
+        }
+        return new Response(
+          JSON.stringify({ result: runCmd(body as Array<string | number>) }),
+          { status: 200 },
+        );
+      });
+
+    try {
+      const kv = new KvTreeStore(() => ({
+        url: "https://mock.upstash.io",
+        token: "tok",
+      }));
+      const meta = await kv.getTree("legacykv");
+      expect(meta?.handle).toBe("legacykv");
+      expect(meta?.ownerTokenHash).toBe("deadbeef1234");
+      expect(kvState.has("hoho:tree:legacykv")).toBe(true);
+      expect(expires.get("hoho:tree:legacykv")).toBe(604_800);
+
+      const migratedMsgs = await kv.listMessages("legacykv");
+      expect(migratedMsgs).toHaveLength(1);
+      expect(migratedMsgs[0].body).toBe("Old holiday cheer");
+
+      const sum = await kv.summary("legacykv");
+      expect(sum).toEqual({ unread: 1, latestSeq: 4, total: 1 });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

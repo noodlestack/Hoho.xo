@@ -1,14 +1,23 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
   classifyMessage,
-  createMessageRecord,
   type ReportReason,
   type TreeMessage,
 } from "./messages";
 import { resolveTreeOrnaments } from "./qr-tree";
+import {
+  createStoreAdapters,
+  getMaxMessagesPerTree,
+  selectTreeStore,
+  type IdempotencyEntry,
+  type MailSummary,
+  type StoreAdapters,
+  type StoredTreeRecord,
+  type TreeMeta,
+  type TreeStore,
+} from "./store";
 import {
   defaultTreeConfig,
   isTreeSceneryId,
@@ -21,14 +30,7 @@ import { isTreeThemeId } from "./tree-themes";
 
 export const OWNER_COOKIE_PREFIX = "hoho_owner_";
 
-export interface StoredTreeRecord {
-  handle: string;
-  ownerTokenHash: string;
-  config: TreeConfig;
-  messages: TreeMessage[];
-  createdAt: string;
-  updatedAt: string;
-}
+export type { StoredTreeRecord, MailSummary };
 
 export interface PublicOrnamentStub {
   id: string;
@@ -49,10 +51,6 @@ export interface PublicTreeData {
   totalVisible: number;
 }
 
-interface StoreFileSnapshot {
-  trees: Record<string, StoredTreeRecord>;
-}
-
 const VALID_REPORT_REASONS = new Set<ReportReason>([
   "harassment",
   "threat",
@@ -64,26 +62,15 @@ const VALID_REPORT_REASONS = new Set<ReportReason>([
 
 interface SharedStoreState {
   memoryTrees: Map<string, StoredTreeRecord>;
+  idempotency: Map<string, Map<string, IdempotencyEntry>>;
   rateBuckets: Map<string, number[]>;
-  fileWriteQueue: Promise<void>;
   fsUnavailable: boolean;
+  adapters?: StoreAdapters;
 }
 
 const globalForHohoStore = globalThis as typeof globalThis & {
   __hohoSharedStore?: SharedStoreState;
 };
-
-function getSharedState(): SharedStoreState {
-  if (!globalForHohoStore.__hohoSharedStore) {
-    globalForHohoStore.__hohoSharedStore = {
-      memoryTrees: new Map<string, StoredTreeRecord>(),
-      rateBuckets: new Map<string, number[]>(),
-      fileWriteQueue: Promise.resolve(),
-      fsUnavailable: false,
-    };
-  }
-  return globalForHohoStore.__hohoSharedStore;
-}
 
 function getKvEnv(): { url: string; token: string } | null {
   const url =
@@ -107,6 +94,35 @@ function getStoreFilePath(): string {
   return path.join(process.cwd(), ".data", "hoho-store.json");
 }
 
+function getSharedState(): SharedStoreState {
+  if (!globalForHohoStore.__hohoSharedStore) {
+    globalForHohoStore.__hohoSharedStore = {
+      memoryTrees: new Map<string, StoredTreeRecord>(),
+      idempotency: new Map<string, Map<string, IdempotencyEntry>>(),
+      rateBuckets: new Map<string, number[]>(),
+      fsUnavailable: false,
+    };
+  }
+  if (!globalForHohoStore.__hohoSharedStore.adapters) {
+    const state = globalForHohoStore.__hohoSharedStore;
+    state.adapters = createStoreAdapters({
+      getKvEnv,
+      getFilePath: getStoreFilePath,
+      memoryTrees: state.memoryTrees,
+      idempotency: state.idempotency,
+      markFsUnavailable: () => {
+        state.fsUnavailable = true;
+      },
+    });
+  }
+  return globalForHohoStore.__hohoSharedStore;
+}
+
+export function getActiveTreeStore(): TreeStore {
+  const state = getSharedState();
+  return selectTreeStore(getStorageMode(), state.adapters!);
+}
+
 export function getStorageMode(): "kv" | "file" | "memory" {
   if (getKvEnv()) return "kv";
   return getSharedState().fsUnavailable ? "memory" : "file";
@@ -115,9 +131,9 @@ export function getStorageMode(): "kv" | "file" | "memory" {
 export function resetMemoryStoreForTests(): void {
   const state = getSharedState();
   state.memoryTrees.clear();
+  state.idempotency.clear();
   state.rateBuckets.clear();
   state.fsUnavailable = false;
-  state.fileWriteQueue = Promise.resolve();
 }
 
 export function generateOwnerToken(): string {
@@ -227,7 +243,7 @@ export async function checkRateLimit(
       }
       return { allowed: true };
     } catch {
-      // Fall through to process-local rate bucket cleanly
+      // Replaced by sliding-window limiter in Task 1.4
     }
   }
 
@@ -246,105 +262,6 @@ export async function checkRateLimit(
   existing.push(now);
   state.rateBuckets.set(bucketKey, existing);
   return { allowed: true };
-}
-
-async function readSnapshotFromFile(): Promise<StoreFileSnapshot> {
-  const filePath = getStoreFilePath();
-  try {
-    const raw = await fs.readFile(/*turbopackIgnore: true*/ filePath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      "trees" in parsed &&
-      parsed.trees &&
-      typeof parsed.trees === "object"
-    ) {
-      return parsed as StoreFileSnapshot;
-    }
-    return { trees: {} };
-  } catch (err) {
-    const code =
-      err && typeof err === "object" && "code" in err
-        ? String((err as { code?: string }).code)
-        : "";
-    if (code && code !== "ENOENT") {
-      getSharedState().fsUnavailable = true;
-    }
-    return { trees: {} };
-  }
-}
-
-async function readTreeFromStore(
-  handle: string,
-): Promise<StoredTreeRecord | null> {
-  const clean = parseHandle(handle);
-  if (!clean) return null;
-  const kv = getKvEnv();
-  if (kv) {
-    const raw = await kvCommand(["GET", `hoho:tree:${clean}`]);
-    if (typeof raw !== "string") return null;
-    try {
-      return JSON.parse(raw) as StoredTreeRecord;
-    } catch {
-      return null;
-    }
-  }
-
-  const state = getSharedState();
-  if (!state.fsUnavailable) {
-    await state.fileWriteQueue;
-    const snap = await readSnapshotFromFile();
-    const record = snap.trees[clean] ?? null;
-    if (record) {
-      state.memoryTrees.set(clean, record);
-      return record;
-    }
-    return null;
-  }
-
-  return state.memoryTrees.get(clean) ?? null;
-}
-
-async function writeTreeToStore(record: StoredTreeRecord): Promise<void> {
-  const clean = parseHandle(record.handle);
-  if (!clean) return;
-  const state = getSharedState();
-  const nextRecord: StoredTreeRecord = { ...record, handle: clean };
-  state.memoryTrees.set(clean, nextRecord);
-
-  const kv = getKvEnv();
-  if (kv) {
-    await kvCommand(["SET", `hoho:tree:${clean}`, JSON.stringify(nextRecord)]);
-    return;
-  }
-
-  if (state.fsUnavailable) return;
-
-  const task = state.fileWriteQueue.then(async () => {
-    try {
-      const filePath = getStoreFilePath();
-      const dir = path.dirname(filePath);
-      await fs.mkdir(/*turbopackIgnore: true*/ dir, { recursive: true });
-      const snap = await readSnapshotFromFile();
-      snap.trees[clean] = nextRecord;
-      const tmpPath = `${filePath}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-      await fs.writeFile(
-        /*turbopackIgnore: true*/ tmpPath,
-        JSON.stringify(snap, null, 2),
-        "utf8",
-      );
-      await fs.rename(
-        /*turbopackIgnore: true*/ tmpPath,
-        /*turbopackIgnore: true*/ filePath,
-      );
-    } catch {
-      state.fsUnavailable = true;
-    }
-  });
-
-  state.fileWriteQueue = task.catch(() => {});
-  await task;
 }
 
 export function sanitizeConfigPatch(
@@ -440,7 +357,11 @@ export function toPublicTreeData(
 export async function getTreeRecord(
   handle: string,
 ): Promise<StoredTreeRecord | null> {
-  return readTreeFromStore(handle);
+  const store = getActiveTreeStore();
+  const meta = await store.getTree(handle);
+  if (!meta) return null;
+  const messages = await store.listMessages(handle);
+  return { ...meta, messages };
 }
 
 export async function claimOrVerifyTree(
@@ -464,49 +385,64 @@ export async function claimOrVerifyTree(
       error: "Handles use 3–20 letters, numbers, or underscores.",
     };
   }
-  const existing = await readTreeFromStore(handle);
+
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(handle);
+
+  if (existing) {
+    if (
+      existing.ownerTokenHash.length > 0 &&
+      providedToken &&
+      verifyOwnerToken(providedToken, existing.ownerTokenHash)
+    ) {
+      const messages = await store.listMessages(handle);
+      return { ok: true, created: false, record: { ...existing, messages } };
+    }
+    return {
+      ok: false,
+      status: 409,
+      error:
+        "This handle is already claimed. Enter its Owner Access Key to unlock Mail.",
+    };
+  }
+
   const now = new Date().toISOString();
+  const ownerToken = generateOwnerToken();
+  const baseCfg = defaultTreeConfig(handle);
+  const config = sanitizeConfigPatch(initialConfig, baseCfg);
+  const meta: TreeMeta = {
+    handle,
+    ownerTokenHash: hashOwnerToken(ownerToken),
+    config,
+    createdAt: now,
+    updatedAt: now,
+  };
 
-  if (!existing) {
-    const ownerToken = generateOwnerToken();
-    const baseCfg = defaultTreeConfig(handle);
-    const config = sanitizeConfigPatch(initialConfig, baseCfg);
-    const created: StoredTreeRecord = {
-      handle,
-      ownerTokenHash: hashOwnerToken(ownerToken),
-      config,
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
+  const createdOk = await store.createTreeIfAbsent(meta);
+  if (!createdOk) {
+    const raced = await store.getTree(handle);
+    if (
+      raced &&
+      raced.ownerTokenHash.length > 0 &&
+      providedToken &&
+      verifyOwnerToken(providedToken, raced.ownerTokenHash)
+    ) {
+      const messages = await store.listMessages(handle);
+      return { ok: true, created: false, record: { ...raced, messages } };
+    }
+    return {
+      ok: false,
+      status: 409,
+      error:
+        "This handle is already claimed. Enter its Owner Access Key to unlock Mail.",
     };
-    await writeTreeToStore(created);
-    return { ok: true, created: true, ownerToken, record: created };
-  }
-
-  // An auto-initialized tree from early visitor messages (unclaimed) can be claimed once cleanly
-  if (existing.ownerTokenHash.length === 0) {
-    const ownerToken = generateOwnerToken();
-    const updated: StoredTreeRecord = {
-      ...existing,
-      ownerTokenHash: hashOwnerToken(ownerToken),
-      config: initialConfig
-        ? sanitizeConfigPatch(initialConfig, existing.config)
-        : existing.config,
-      updatedAt: now,
-    };
-    await writeTreeToStore(updated);
-    return { ok: true, created: true, ownerToken, record: updated };
-  }
-
-  if (providedToken && verifyOwnerToken(providedToken, existing.ownerTokenHash)) {
-    return { ok: true, created: false, record: existing };
   }
 
   return {
-    ok: false,
-    status: 409,
-    error:
-      "This handle is already claimed. Enter its Owner Access Key to unlock Mail.",
+    ok: true,
+    created: true,
+    ownerToken,
+    record: { ...meta, messages: [] },
   };
 }
 
@@ -514,35 +450,38 @@ export async function verifyTreeOwner(
   handle: string,
   providedToken: string | null,
 ): Promise<StoredTreeRecord | null> {
-  const existing = await readTreeFromStore(handle);
-  if (!existing || existing.ownerTokenHash.length === 0 || !providedToken) {
+  if (!providedToken) return null;
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(handle);
+  if (!existing || existing.ownerTokenHash.length === 0) {
     return null;
   }
-  return verifyOwnerToken(providedToken, existing.ownerTokenHash)
-    ? existing
-    : null;
+  if (!verifyOwnerToken(providedToken, existing.ownerTokenHash)) {
+    return null;
+  }
+  const messages = await store.listMessages(handle);
+  return { ...existing, messages };
 }
 
 export async function updateTreeConfig(
   handle: string,
   patch: unknown,
 ): Promise<StoredTreeRecord | null> {
-  const existing = await readTreeFromStore(handle);
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(handle);
   if (!existing) return null;
   const nextConfig = sanitizeConfigPatch(patch, existing.config);
-  const updated: StoredTreeRecord = {
-    ...existing,
-    config: nextConfig,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeTreeToStore(updated);
-  return updated;
+  const updated = await store.updateConfig(handle, nextConfig);
+  if (!updated) return null;
+  const messages = await store.listMessages(handle);
+  return { ...updated, messages };
 }
 
 export async function addAnonymousMessage(
   rawHandle: string,
   rawBody: string,
   ornamentType: number | null,
+  options?: { idempotencyKey?: string },
 ): Promise<
   | {
       ok: true;
@@ -550,31 +489,20 @@ export async function addAnonymousMessage(
       totalVisible: number;
       selfHarmNotice?: boolean;
     }
-  | { ok: false; status: 400 | 403 | 404; error: string }
+  | { ok: false; status: 400 | 403 | 404 | 429; error: string }
 > {
   const handle = parseHandle(rawHandle);
   if (!handle) {
-    return {
-      ok: false,
-      status: 404,
-      error: "Tree not found.",
-    };
-  }
-  const now = new Date().toISOString();
-  let existing = await readTreeFromStore(handle);
-
-  if (!existing) {
-    existing = {
-      handle,
-      ownerTokenHash: "",
-      config: defaultTreeConfig(handle),
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    return { ok: false, status: 404, error: "Tree not found." };
   }
 
-  if (existing.config.pauseInbox) {
+  const store = getActiveTreeStore();
+  const meta = await store.getTree(handle);
+  if (!meta || meta.ownerTokenHash.length === 0) {
+    return { ok: false, status: 404, error: "Tree not found." };
+  }
+
+  if (meta.config.pauseInbox) {
     return {
       ok: false,
       status: 403,
@@ -582,7 +510,7 @@ export async function addAnonymousMessage(
     };
   }
 
-  const verdict = classifyMessage(rawBody, existing.config.mutedWords);
+  const verdict = classifyMessage(rawBody, meta.config.mutedWords);
   if (verdict.decision === "reject") {
     return {
       ok: false,
@@ -591,27 +519,23 @@ export async function addAnonymousMessage(
     };
   }
 
-  const maxSeq = existing.messages.reduce((acc, m) => Math.max(acc, m.seq), 0);
-  const normalizedOrnamentType =
-    typeof ornamentType === "number" && Number.isFinite(ornamentType)
-      ? Math.max(0, Math.min(15, Math.floor(ornamentType)))
-      : null;
+  const appended = await store.appendMessage(
+    handle,
+    { body: rawBody, ornamentType },
+    {
+      idempotencyKey: options?.idempotencyKey,
+      cap: getMaxMessagesPerTree(),
+    },
+  );
 
-  const record = createMessageRecord({
-    body: rawBody,
-    ornamentType: normalizedOrnamentType,
-    nextSeq: maxSeq + 1,
-  });
+  if (!appended.ok) {
+    if (appended.reason === "cap") {
+      return { ok: false, status: 429, error: "This tree is full for now." };
+    }
+    return { ok: false, status: 404, error: "Tree not found." };
+  }
 
-  const nextMessages = [...existing.messages, record];
-  const updated: StoredTreeRecord = {
-    ...existing,
-    messages: nextMessages,
-    updatedAt: now,
-  };
-  await writeTreeToStore(updated);
-
-  const totalVisible = nextMessages.filter((m) => m.status === "visible").length;
+  const record = appended.message;
   return {
     ok: true,
     ornament: {
@@ -624,7 +548,7 @@ export async function addAnonymousMessage(
       readAt: null,
       createdAt: record.createdAt,
     },
-    totalVisible,
+    totalVisible: appended.totalVisible,
     selfHarmNotice: verdict.selfHarmNotice,
   };
 }
@@ -633,22 +557,11 @@ export async function markMessageRead(
   handle: string,
   id: string,
 ): Promise<TreeMessage | null> {
-  const existing = await readTreeFromStore(handle);
+  const store = getActiveTreeStore();
+  const existing = await store.getMessage(handle, id);
   if (!existing) return null;
-  let updatedMsg: TreeMessage | null = null;
-  const now = new Date().toISOString();
-  const nextMessages = existing.messages.map((m) => {
-    if (m.id !== id) return m;
-    updatedMsg = m.readAt ? m : { ...m, readAt: now };
-    return updatedMsg;
-  });
-  if (!updatedMsg) return null;
-  await writeTreeToStore({
-    ...existing,
-    messages: nextMessages,
-    updatedAt: now,
-  });
-  return updatedMsg;
+  if (existing.readAt) return existing;
+  return store.patchMessage(handle, id, { readAt: new Date().toISOString() });
 }
 
 export async function reportMessage(
@@ -662,65 +575,28 @@ export async function reportMessage(
       ? (rawReason as ReportReason)
       : "other";
 
-  const existing = await readTreeFromStore(handle);
+  const store = getActiveTreeStore();
+  const existing = await store.getMessage(handle, id);
   if (!existing) return null;
-  let updatedMsg: TreeMessage | null = null;
   const now = new Date().toISOString();
-  const nextMessages = existing.messages.map((m) => {
-    if (m.id !== id) return m;
-    updatedMsg = {
-      ...m,
-      status: "reported",
-      reportReason: reason,
-      readAt: m.readAt ?? now,
-    };
-    return updatedMsg;
+  return store.patchMessage(handle, id, {
+    status: "reported",
+    reportReason: reason,
+    readAt: existing.readAt ?? now,
   });
-  if (!updatedMsg) return null;
-  await writeTreeToStore({
-    ...existing,
-    messages: nextMessages,
-    updatedAt: now,
-  });
-  return updatedMsg;
 }
 
 export async function deleteMessage(
   handle: string,
   id: string,
 ): Promise<boolean> {
-  const existing = await readTreeFromStore(handle);
-  if (!existing) return false;
-  const nextMessages = existing.messages.filter((m) => m.id !== id);
-  if (nextMessages.length === existing.messages.length) return false;
-  await writeTreeToStore({
-    ...existing,
-    messages: nextMessages,
-    updatedAt: new Date().toISOString(),
-  });
-  return true;
+  return getActiveTreeStore().deleteMessage(handle, id);
 }
 
 export async function markAllMessagesRead(handle: string): Promise<number> {
-  const existing = await readTreeFromStore(handle);
-  if (!existing) return 0;
+  return getActiveTreeStore().markAllRead(handle);
+}
 
-  let changedCount = 0;
-  const now = new Date().toISOString();
-  const nextMessages = existing.messages.map((m) => {
-    if (m.status === "visible" && m.readAt === null) {
-      changedCount += 1;
-      return { ...m, readAt: now };
-    }
-    return m;
-  });
-
-  if (changedCount > 0) {
-    await writeTreeToStore({
-      ...existing,
-      messages: nextMessages,
-      updatedAt: now,
-    });
-  }
-  return changedCount;
+export async function getMailSummary(handle: string): Promise<MailSummary> {
+  return getActiveTreeStore().summary(handle);
 }

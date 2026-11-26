@@ -243,6 +243,7 @@ export function HohoExperience({
 
   const copiedTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
+  const composeSubmitKeyRef = useRef<string | null>(null);
   const configSyncTimerRef = useRef<number | null>(null);
   const shareRowWrapRef = useRef<HTMLDivElement | null>(null);
   const shortcutsWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1079,6 +1080,7 @@ export function HohoExperience({
     setVisitorIdeaIdx(nextIdx);
     setNoteBody(pickedPrompt);
     writeVisitorDraft(activeHandle, pickedPrompt);
+    composeSubmitKeyRef.current = null;
     setSubmitError("");
     if (soundEnabled) playOrnamentChime("click");
     visitorInputRef.current?.focus();
@@ -1130,12 +1132,22 @@ export function HohoExperience({
       setSubmittingNote(true);
       setSubmitError("");
 
+      const submitKey =
+        composeSubmitKeyRef.current ??
+        (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      composeSubmitKeyRef.current = submitKey;
+
       try {
         const res = await fetch(
           `/api/trees/${encodeURIComponent(activeHandle)}/messages`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": submitKey,
+            },
             body: JSON.stringify({
               body: noteBody,
               ornamentType: selectedOrnament,
@@ -1153,6 +1165,7 @@ export function HohoExperience({
         };
 
         if (res.status === 403) {
+          composeSubmitKeyRef.current = null;
           setConfig((prev) => ({ ...prev, pauseInbox: true }));
           setSubmitError(
             data.error ?? `@${activeHandle} paused new anonymous notes.`,
@@ -1161,9 +1174,14 @@ export function HohoExperience({
         }
 
         if (!res.ok || !data.ok) {
+          if (res.status >= 400 && res.status < 500) {
+            composeSubmitKeyRef.current = null;
+          }
           setSubmitError(data.error ?? "Could not hang ornament right now.");
           return;
         }
+
+        composeSubmitKeyRef.current = null;
 
         if (data.ornament) {
           const placed = { ...data.ornament, body: "" };
@@ -2319,6 +2337,7 @@ export function HohoExperience({
                       const nextVal = event.target.value;
                       setNoteBody(nextVal);
                       writeVisitorDraft(activeHandle, nextVal);
+                      composeSubmitKeyRef.current = null;
                       if (submitError) setSubmitError("");
                     }}
                     onKeyDown={(event) => {

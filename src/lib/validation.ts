@@ -73,6 +73,13 @@ export const patchMailSchema = z.object({
   action: z.literal("mark_all_read"),
 });
 
+export const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(1, "Invalid Idempotency-Key header.")
+  .max(64, "Invalid Idempotency-Key header.")
+  .regex(/^[A-Za-z0-9_-]+$/, "Invalid Idempotency-Key header.");
+
 export function formatZodError(error: z.ZodError): string {
   return error.issues[0]?.message || "Invalid request payload.";
 }
