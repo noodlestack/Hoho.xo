@@ -101,6 +101,10 @@ function cubicEaseInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+function quadEaseInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
 function dampedBounce(t: number): number {
   if (t >= 1) return 1;
   const inv = 1 - t;
@@ -476,16 +480,25 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         reducedMotion: curReduced,
       } = propsRef.current;
 
-      // Update view transition
+      // Update view transition (radial QR morph wave <= 1.2s total)
       const st = animStateRef.current;
+      const isQrMorph = Math.abs(st.targetQrMix - st.fromQrMix) > 0.01;
+      const transitionDurMs = isQrMorph ? 1150 : 680;
+      const qrElapsedSec = st.inTransition
+        ? Math.min(1.15, Math.max(0, (now - st.transitionStart) / 1000))
+        : st.qrMix >= 0.5
+          ? 1.15
+          : 0;
       if (st.inTransition) {
-        const elapsed = (now - st.transitionStart) / 680;
+        const elapsed = (now - st.transitionStart) / transitionDurMs;
         if (elapsed >= 1) {
           st.qrMix = st.targetQrMix;
           st.elev = st.targetElev;
           st.inTransition = false;
         } else {
-          const eased = cubicEaseInOut(Math.max(0, elapsed));
+          const eased = isQrMorph
+            ? quadEaseInOut(Math.max(0, elapsed))
+            : cubicEaseInOut(Math.max(0, elapsed));
           st.qrMix = st.fromQrMix + (st.targetQrMix - st.fromQrMix) * eased;
           st.elev = st.fromElev + (st.targetElev - st.fromElev) * eased;
         }
@@ -821,10 +834,25 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       const grow = growStateRef.current;
 
       if (glyphAlpha > 0.02) {
+        const morphingToQr = st.targetQrMix > st.fromQrMix;
+        const useRadialWave = st.inTransition && isQrMorph && !curReduced;
         for (let i = 0; i < curCloud.length; i += 1) {
           const pt = curCloud[i];
           if (pt.kind !== "ground" && grow.foliage < 0.999) {
             if (pt.y > TREE_HEIGHT * grow.foliage) continue;
+          }
+
+          let ptQrMix = st.qrMix;
+          if (useRadialWave) {
+            const normRad = Math.min(1, Math.max(0, pt.qrRadius / 1.414));
+            const delay = morphingToQr
+              ? normRad * 0.45
+              : (1 - normRad) * 0.45;
+            const localT = Math.max(0, Math.min(1, (qrElapsedSec - delay) / 0.7));
+            const easedLocal = quadEaseInOut(localT);
+            ptQrMix = morphingToQr
+              ? st.fromQrMix + (st.targetQrMix - st.fromQrMix) * easedLocal
+              : st.fromQrMix + (st.targetQrMix - st.fromQrMix) * easedLocal;
           }
 
           const swayX =
@@ -832,10 +860,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               ? 0
               : Math.pow(Math.max(0, pt.y), 1.5) * 0.008 * windWave;
           let px =
-            (pt.x + swayX) * (1 - st.qrMix) + pt.qrX * TREE_BASE_RADIUS * st.qrMix;
+            (pt.x + swayX) * (1 - ptQrMix) + pt.qrX * TREE_BASE_RADIUS * ptQrMix;
           let pz =
-            pt.z * (1 - st.qrMix) + pt.qrZ * TREE_BASE_RADIUS * st.qrMix;
-          const py = pt.y * (1 - st.qrMix);
+            pt.z * (1 - ptQrMix) + pt.qrZ * TREE_BASE_RADIUS * ptQrMix;
+          const py = pt.y * (1 - ptQrMix);
 
           if (swirlPeak > 0.01) {
             const sAng = swirlPeak * (1 - pt.qrRadius * 0.25);
@@ -1207,6 +1235,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         // Render themed high-contrast QR modules strictly inside the 4-module quiet zone
         const n = curMatrix.size;
         const halfN = (n - 1) / 2;
+        const morphingToQrPlate = st.targetQrMix > st.fromQrMix;
+        const usePlateWave = st.inTransition && isQrMorph && !curReduced;
         for (let i = 0; i < curMatrix.cells.length; i += 1) {
           const { row, column } = curMatrix.cells[i];
           const finder = isFinderCell(row, column, n);
@@ -1214,11 +1244,21 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             1,
             Math.hypot(column - halfN, row - halfN) / (halfN * 1.414),
           );
-          const threshold = finder ? 0.15 : 0.25 + normDist * 0.55;
-          const cellReveal = Math.max(
-            0,
-            Math.min(1, (st.qrMix - threshold * 0.55) / 0.45),
-          );
+          let cellReveal: number;
+          if (usePlateWave) {
+            const delay = morphingToQrPlate
+              ? normDist * 0.45
+              : (1 - normDist) * 0.45;
+            const localT = Math.max(0, Math.min(1, (qrElapsedSec - delay) / 0.7));
+            const waveMix = quadEaseInOut(localT);
+            cellReveal = morphingToQrPlate ? waveMix : 1 - waveMix;
+          } else {
+            const threshold = finder ? 0.15 : 0.25 + normDist * 0.55;
+            cellReveal = Math.max(
+              0,
+              Math.min(1, (st.qrMix - threshold * 0.55) / 0.45),
+            );
+          }
           if (cellReveal <= 0.01) continue;
 
           ctx.fillStyle = finder ? curTheme.qrFinder : curTheme.qrDark;
