@@ -92,6 +92,57 @@ let sharedCtx: AudioContext | null = null;
 let musicBus: GainNode | null = null;
 let sfxBus: GainNode | null = null;
 
+type SampledCueKind = "drop" | "open" | "qr";
+/** Populate paths after dropping Kenney CC0 .ogg files into public/audio/ (see LICENSES.md). */
+const BUNDLED_CUE_PATHS: Partial<Record<SampledCueKind, string>> = {};
+const cueBufferCache = new Map<SampledCueKind, AudioBuffer | null>();
+const pendingCueLoads = new Map<SampledCueKind, Promise<void>>();
+
+function preloadCueBuffer(
+  ctx: AudioContext,
+  kind: SampledCueKind,
+  url: string,
+): void {
+  if (
+    typeof fetch !== "function" ||
+    cueBufferCache.has(kind) ||
+    pendingCueLoads.has(kind)
+  ) {
+    return;
+  }
+  const job = fetch(url, { cache: "force-cache" })
+    .then(async (res) => {
+      if (!res.ok) {
+        cueBufferCache.set(kind, null);
+        return;
+      }
+      const arr = await res.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arr);
+      cueBufferCache.set(kind, decoded);
+    })
+    .catch(() => {
+      cueBufferCache.set(kind, null);
+    })
+    .finally(() => {
+      pendingCueLoads.delete(kind);
+    });
+  pendingCueLoads.set(kind, job);
+}
+
+function playDecodedCueBuffer(
+  ctx: AudioContext,
+  destination: AudioNode,
+  buffer: AudioBuffer,
+): void {
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  source.buffer = buffer;
+  gain.gain.setValueAtTime(0.45, ctx.currentTime);
+  source.connect(gain);
+  gain.connect(destination);
+  source.start();
+}
+
 let currentTrackIdx = 0;
 let musicPlaying = false;
 let schedulerId: number | null = null;
@@ -316,6 +367,18 @@ export function playOrnamentChime(
   try {
     const ctx = ensureAudioBuses();
     if (!ctx || !sfxBus) return;
+
+    if (kind === "drop" || kind === "open" || kind === "qr") {
+      const cached = cueBufferCache.get(kind);
+      if (cached) {
+        playDecodedCueBuffer(ctx, sfxBus, cached);
+        return;
+      }
+      const url = BUNDLED_CUE_PATHS[kind];
+      if (url && !cueBufferCache.has(kind)) {
+        preloadCueBuffer(ctx, kind, url);
+      }
+    }
 
     const now = ctx.currentTime;
     const patterns: Record<

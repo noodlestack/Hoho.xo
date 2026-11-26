@@ -1198,6 +1198,9 @@ export function HohoExperience({
           playOrnamentChime("drop");
         }
         if (!reducedMotion) {
+          if (typeof navigator !== "undefined") {
+            navigator.vibrate?.(12);
+          }
           void import("canvas-confetti")
             .then(({ default: confetti }) =>
               confetti({
