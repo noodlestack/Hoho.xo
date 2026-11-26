@@ -8,6 +8,8 @@ import type {
   IdempotencyEntry,
   MailSummary,
   MessagePatch,
+  PushState,
+  StoredPushSubscription,
   StoredTreeRecord,
   TreeMeta,
   TreeStore,
@@ -174,6 +176,7 @@ export class MemoryTreeStore implements TreeStore {
   constructor(
     private readonly trees: Map<string, StoredTreeRecord>,
     private readonly idempotency: Map<string, Map<string, IdempotencyEntry>>,
+    private readonly pushStates: Map<string, PushState> = new Map(),
   ) {}
 
   private getIdemMap(handle: string): Map<string, IdempotencyEntry> {
@@ -326,6 +329,73 @@ export class MemoryTreeStore implements TreeStore {
     if (!clean) return { unread: 0, latestSeq: 0, total: 0 };
     return this.mutex.runExclusive(async () => {
       return computeRecordSummary(this.trees.get(clean));
+    });
+  }
+
+  async listPushSubscriptions(
+    handle: string,
+  ): Promise<StoredPushSubscription[]> {
+    const clean = parseHandle(handle);
+    if (!clean) return [];
+    return this.mutex.runExclusive(async () => {
+      return [...(this.pushStates.get(clean)?.subscriptions ?? [])];
+    });
+  }
+
+  async upsertPushSubscription(
+    handle: string,
+    sub: StoredPushSubscription,
+    maxDevices = 5,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    return this.mutex.runExclusive(async () => {
+      const state = this.pushStates.get(clean) ?? {
+        subscriptions: [],
+        lastNotifiedAt: 0,
+      };
+      const filtered = state.subscriptions.filter(
+        (item) => item.endpoint !== sub.endpoint,
+      );
+      const nextSubs = [...filtered, sub].slice(-Math.max(1, maxDevices));
+      this.pushStates.set(clean, { ...state, subscriptions: nextSubs });
+      return nextSubs.length;
+    });
+  }
+
+  async removePushSubscription(
+    handle: string,
+    endpoint: string,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    return this.mutex.runExclusive(async () => {
+      const state = this.pushStates.get(clean);
+      if (!state) return 0;
+      const nextSubs = state.subscriptions.filter(
+        (item) => item.endpoint !== endpoint,
+      );
+      this.pushStates.set(clean, { ...state, subscriptions: nextSubs });
+      return nextSubs.length;
+    });
+  }
+
+  async claimPushCoalesceWindow(
+    handle: string,
+    windowMs = 60_000,
+  ): Promise<boolean> {
+    const clean = parseHandle(handle);
+    if (!clean) return false;
+    return this.mutex.runExclusive(async () => {
+      const now = Date.now();
+      const state = this.pushStates.get(clean) ?? {
+        subscriptions: [],
+        lastNotifiedAt: 0,
+      };
+      if (state.subscriptions.length === 0) return false;
+      if (now - state.lastNotifiedAt < windowMs) return false;
+      this.pushStates.set(clean, { ...state, lastNotifiedAt: now });
+      return true;
     });
   }
 }

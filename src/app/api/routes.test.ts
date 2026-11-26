@@ -9,9 +9,19 @@ import {
   PATCH as messagePatch,
 } from "./trees/[handle]/messages/[id]/route";
 import { POST as messagesPost } from "./trees/[handle]/messages/route";
+import {
+  DELETE as pushDelete,
+  GET as pushGet,
+  POST as pushPost,
+} from "./trees/[handle]/push/route";
 import { GET as treeGet, PATCH as treePatch } from "./trees/[handle]/route";
 import { POST as treesPost } from "./trees/route";
 import { resetMemoryStoreForTests } from "@/lib/server-store";
+import {
+  pushTransport,
+  resetPushConfigForTests,
+  sendOwnerNewOrnamentPush,
+} from "@/lib/push";
 
 const routesTempDir = path.join(os.tmpdir(), `hoho-xo-routes-${process.pid}`);
 const routesTempFile = path.join(routesTempDir, "store.json");
@@ -472,5 +482,108 @@ describe("Task 3.1 API route handler integration tests", () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+
+  it("enforces auth, origin, 5-device cap, coalescing, and generic payload on Web Push", async () => {
+    const claimRes = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        body: { handle: "pushtree" },
+      }),
+    );
+    expect(claimRes.status).toBe(201);
+    const ownerCookie = extractCookiePair(claimRes.headers.get("set-cookie"));
+
+    // Unauthenticated requests fail closed
+    const unauthGet = await pushGet(
+      new Request("http://localhost:3000/api/trees/pushtree/push"),
+      { params: Promise.resolve({ handle: "pushtree" }) },
+    );
+    expect(unauthGet.status).toBe(401);
+
+    const foreignPost = await pushPost(
+      ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "POST", {
+        origin: "https://evil.example.com",
+        cookie: ownerCookie,
+        body: {
+          endpoint: "https://push.example.org/sub/1",
+          keys: { p256dh: "p256dh_key_1", auth: "auth_key_1" },
+        },
+      }),
+      { params: Promise.resolve({ handle: "pushtree" }) },
+    );
+    expect(foreignPost.status).toBe(403);
+
+    // Subscribe 6 devices -> capped cleanly at 5 newest
+    for (let i = 1; i <= 6; i += 1) {
+      const subRes = await pushPost(
+        ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "POST", {
+          cookie: ownerCookie,
+          body: {
+            endpoint: `https://push.example.org/sub/${i}`,
+            keys: { p256dh: `p256dh_key_${i}`, auth: `auth_key_${i}` },
+          },
+        }),
+        { params: Promise.resolve({ handle: "pushtree" }) },
+      );
+      expect(subRes.status).toBe(200);
+      const json = (await subRes.json()) as { count: number };
+      expect(json.count).toBeLessThanOrEqual(5);
+    }
+
+    const listRes = await pushGet(
+      new Request("http://localhost:3000/api/trees/pushtree/push", {
+        headers: { cookie: ownerCookie },
+      }),
+      { params: Promise.resolve({ handle: "pushtree" }) },
+    );
+    expect(listRes.status).toBe(200);
+    expect((await listRes.json()) as { count: number; subscribed: boolean }).toEqual({
+      ok: true,
+      count: 5,
+      subscribed: true,
+    });
+
+    // Mock webpush and verify 1/min coalescing + zero note text in push payload
+    process.env.VAPID_PUBLIC_KEY =
+      "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
+    process.env.VAPID_PRIVATE_KEY = "test-private-key-placeholder";
+    resetPushConfigForTests();
+
+    const setVapidSpy = vi
+      .spyOn(pushTransport, "setVapidDetails")
+      .mockImplementation(() => {});
+    const sendSpy = vi
+      .spyOn(pushTransport, "sendNotification")
+      .mockResolvedValue({ statusCode: 201, headers: {}, body: "" });
+    try {
+      const firstSend = await sendOwnerNewOrnamentPush("pushtree");
+      expect(firstSend).toEqual({ sent: 5, skipped: false });
+      expect(setVapidSpy).toHaveBeenCalledTimes(1);
+      expect(sendSpy).toHaveBeenCalledTimes(5);
+      const sentPayload = String(sendSpy.mock.calls[0]?.[1] ?? "");
+      expect(sentPayload).toContain("New ornament on your Hoho.xo tree");
+      expect(sentPayload).not.toContain("SecretVisitorNote");
+
+      // Immediate second push within 60s window is coalesced
+      const secondSend = await sendOwnerNewOrnamentPush("pushtree");
+      expect(secondSend).toEqual({ sent: 0, skipped: true });
+      expect(sendSpy).toHaveBeenCalledTimes(5);
+    } finally {
+      setVapidSpy.mockRestore();
+      sendSpy.mockRestore();
+      delete process.env.VAPID_PUBLIC_KEY;
+      delete process.env.VAPID_PRIVATE_KEY;
+      resetPushConfigForTests();
+    }
+
+    const delRes = await pushDelete(
+      ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "DELETE", {
+        cookie: ownerCookie,
+        body: { endpoint: "https://push.example.org/sub/6" },
+      }),
+      { params: Promise.resolve({ handle: "pushtree" }) },
+    );
+    expect(delRes.status).toBe(200);
+    expect((await delRes.json()) as { count: number }).toMatchObject({ count: 4 });
   });
 });

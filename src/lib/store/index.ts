@@ -1,7 +1,12 @@
 import { FileTreeStore } from "./file-store";
 import { KvTreeStore, type KvCredentials } from "./kv-store";
 import { MemoryTreeStore } from "./memory-store";
-import type { IdempotencyEntry, StoredTreeRecord, TreeStore } from "./types";
+import type {
+  IdempotencyEntry,
+  PushState,
+  StoredTreeRecord,
+  TreeStore,
+} from "./types";
 
 export { FileTreeStore } from "./file-store";
 export { KvTreeStore } from "./kv-store";
@@ -19,6 +24,7 @@ export function createStoreAdapters(params: {
   getFilePath: () => string;
   memoryTrees: Map<string, StoredTreeRecord>;
   idempotency: Map<string, Map<string, IdempotencyEntry>>;
+  pushStates?: Map<string, PushState>;
   markFsUnavailable: () => void;
 }): StoreAdapters {
   return {
@@ -28,8 +34,13 @@ export function createStoreAdapters(params: {
       params.memoryTrees,
       params.idempotency,
       params.markFsUnavailable,
+      params.pushStates,
     ),
-    memory: new MemoryTreeStore(params.memoryTrees, params.idempotency),
+    memory: new MemoryTreeStore(
+      params.memoryTrees,
+      params.idempotency,
+      params.pushStates,
+    ),
   };
 }
 

@@ -17,8 +17,23 @@ export interface StoredTreeRecord extends TreeMeta {
   messages: TreeMessage[];
 }
 
+export interface StoredPushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  createdAt: string;
+}
+
+export interface PushState {
+  subscriptions: StoredPushSubscription[];
+  lastNotifiedAt: number;
+}
+
 export interface StoreFileSnapshot {
   trees: Record<string, StoredTreeRecord>;
+  push?: Record<string, PushState>;
 }
 
 export interface MailSummary {
@@ -72,6 +87,14 @@ export interface TreeStore {
   deleteMessage(handle: string, id: string): Promise<boolean>;
   markAllRead(handle: string): Promise<number>;
   summary(handle: string): Promise<MailSummary>;
+  listPushSubscriptions(handle: string): Promise<StoredPushSubscription[]>;
+  upsertPushSubscription(
+    handle: string,
+    sub: StoredPushSubscription,
+    maxDevices?: number,
+  ): Promise<number>;
+  removePushSubscription(handle: string, endpoint: string): Promise<number>;
+  claimPushCoalesceWindow(handle: string, windowMs?: number): Promise<boolean>;
 }
 
 export interface IdempotencyEntry {

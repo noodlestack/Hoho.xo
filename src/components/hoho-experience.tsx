@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Bell,
+  BellOff,
   Check,
   Copy,
   Dices,
@@ -105,6 +107,20 @@ const InviteStorySheet = dynamic(
   { ssr: false },
 );
 
+const VAPID_PUBLIC_KEY =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ?? "";
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(new ArrayBuffer(rawData.length));
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export type ExperienceMode = "owner" | "visitor";
 
 interface HohoExperienceProps {
@@ -158,6 +174,9 @@ export function HohoExperience({
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [inviteSheetOpen, setInviteSheetOpen] = useState<boolean>(false);
+  const [pushSubscribed, setPushSubscribed] = useState<boolean>(false);
+  const [pushBusy, setPushBusy] = useState<boolean>(false);
+  const [iosNeedsStandalone, setIosNeedsStandalone] = useState<boolean>(false);
 
   const [noteBody, setNoteBody] = useState<string>("");
   const [honeypot, setHoneypot] = useState<string>("");
@@ -268,6 +287,14 @@ export function HohoExperience({
       if (cancelled) return;
       setOrigin(window.location.origin);
       setIsOnline(navigator.onLine);
+      if (VAPID_PUBLIC_KEY) {
+        const ua = window.navigator.userAgent || "";
+        const isIos = /iPad|iPhone|iPod/i.test(ua);
+        const isStandalone =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          Boolean((window.navigator as { standalone?: boolean }).standalone);
+        setIosNeedsStandalone(isIos && !isStandalone);
+      }
 
       const nowDate = new Date();
       const year = nowDate.getFullYear();
@@ -909,6 +936,84 @@ export function HohoExperience({
       ok ? "success" : "error",
     );
   }, [activeHandle, shareUrl, showToast, theme]);
+
+  const handleTogglePush = useCallback(async () => {
+    if (!VAPID_PUBLIC_KEY || pushBusy) return;
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      typeof Notification === "undefined"
+    ) {
+      showToast("Push notifications require a modern browser.", "info");
+      return;
+    }
+
+    setPushBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+
+      if (pushSubscribed && existing) {
+        await fetch(
+          `/api/trees/${encodeURIComponent(activeHandle)}/push`,
+          {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: existing.endpoint }),
+          },
+        );
+        await existing.unsubscribe();
+        setPushSubscribed(false);
+        showToast("Turned off push alerts for this device", "info");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        showToast("Notification permission was not granted.", "info");
+        return;
+      }
+
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        }));
+
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        showToast("Browser push subscription incomplete.", "error");
+        return;
+      }
+
+      const res = await fetch(
+        `/api/trees/${encodeURIComponent(activeHandle)}/push`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+          }),
+        },
+      );
+      if (!res.ok) {
+        showToast("Could not enable push notifications right now.", "error");
+        return;
+      }
+      setPushSubscribed(true);
+      showToast("Push alerts enabled for new ornaments!");
+    } catch {
+      showToast("Push setup unavailable in this browser context.", "info");
+    } finally {
+      setPushBusy(false);
+    }
+  }, [activeHandle, pushBusy, pushSubscribed, showToast]);
 
   const handleCycleOwnerPrompt = useCallback(() => {
     const nextIdx = (ownerPromptIdx + 1) % OWNER_PROMPT_PRESETS.length;
@@ -1625,6 +1730,35 @@ export function HohoExperience({
                       <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
                     </Link>
                   </div>
+                  {VAPID_PUBLIC_KEY ? (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        aria-pressed={pushSubscribed}
+                        disabled={pushBusy}
+                        onClick={() => void handleTogglePush()}
+                      >
+                        {pushSubscribed ? (
+                          <>
+                            <Bell size={14} strokeWidth={2} aria-hidden="true" />
+                            <span>Notify me: On</span>
+                          </>
+                        ) : (
+                          <>
+                            <BellOff size={14} strokeWidth={2} aria-hidden="true" />
+                            <span>Notify me</span>
+                          </>
+                        )}
+                      </button>
+                      {iosNeedsStandalone ? (
+                        <p className="tree-meta-line">
+                          On iPhone, add Hoho.xo to your Home Screen first to
+                          enable Web Push.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
 
                 {unreadCount > 0 && newestUnread ? (

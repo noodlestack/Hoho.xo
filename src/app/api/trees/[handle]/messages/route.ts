@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { sendOwnerNewOrnamentPush } from "@/lib/push";
 import {
   addAnonymousMessage,
   checkRateLimit,
@@ -179,6 +180,15 @@ export async function POST(
       { ok: false, error: result.error },
       { status: result.status, headers: { "Cache-Control": "no-store" } },
     );
+  }
+
+  try {
+    after(async () => {
+      await sendOwnerNewOrnamentPush(cleanHandle);
+    });
+  } catch {
+    // Fallback when invoked outside a Next.js request scope (e.g. unit tests)
+    void sendOwnerNewOrnamentPush(cleanHandle);
   }
 
   return NextResponse.json(

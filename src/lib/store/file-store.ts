@@ -18,7 +18,9 @@ import type {
   IdempotencyEntry,
   MailSummary,
   MessagePatch,
+  PushState,
   StoreFileSnapshot,
+  StoredPushSubscription,
   StoredTreeRecord,
   TreeMeta,
   TreeStore,
@@ -32,6 +34,7 @@ export class FileTreeStore implements TreeStore {
     private readonly memoryTrees: Map<string, StoredTreeRecord>,
     private readonly idempotency: Map<string, Map<string, IdempotencyEntry>>,
     private readonly markFsUnavailable: () => void,
+    private readonly pushStates: Map<string, PushState> = new Map(),
   ) {}
 
   private getIdemMap(handle: string): Map<string, IdempotencyEntry> {
@@ -258,6 +261,82 @@ export class FileTreeStore implements TreeStore {
       const snap = await this.readSnapshot();
       const existing = snap.trees[clean] ?? this.memoryTrees.get(clean);
       return computeRecordSummary(existing);
+    });
+  }
+
+  async listPushSubscriptions(
+    handle: string,
+  ): Promise<StoredPushSubscription[]> {
+    const clean = parseHandle(handle);
+    if (!clean) return [];
+    return this.mutex.runExclusive(async () => {
+      const snap = await this.readSnapshot();
+      const state = snap.push?.[clean] ?? this.pushStates.get(clean);
+      return [...(state?.subscriptions ?? [])];
+    });
+  }
+
+  async upsertPushSubscription(
+    handle: string,
+    sub: StoredPushSubscription,
+    maxDevices = 5,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    return this.mutex.runExclusive(async () => {
+      const snap = await this.readSnapshot();
+      const prev = snap.push?.[clean] ??
+        this.pushStates.get(clean) ?? { subscriptions: [], lastNotifiedAt: 0 };
+      const filtered = prev.subscriptions.filter(
+        (item) => item.endpoint !== sub.endpoint,
+      );
+      const nextSubs = [...filtered, sub].slice(-Math.max(1, maxDevices));
+      const nextState: PushState = { ...prev, subscriptions: nextSubs };
+      this.pushStates.set(clean, nextState);
+      snap.push = { ...(snap.push ?? {}), [clean]: nextState };
+      await this.writeSnapshot(snap);
+      return nextSubs.length;
+    });
+  }
+
+  async removePushSubscription(
+    handle: string,
+    endpoint: string,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    return this.mutex.runExclusive(async () => {
+      const snap = await this.readSnapshot();
+      const prev = snap.push?.[clean] ?? this.pushStates.get(clean);
+      if (!prev) return 0;
+      const nextSubs = prev.subscriptions.filter(
+        (item) => item.endpoint !== endpoint,
+      );
+      const nextState: PushState = { ...prev, subscriptions: nextSubs };
+      this.pushStates.set(clean, nextState);
+      snap.push = { ...(snap.push ?? {}), [clean]: nextState };
+      await this.writeSnapshot(snap);
+      return nextSubs.length;
+    });
+  }
+
+  async claimPushCoalesceWindow(
+    handle: string,
+    windowMs = 60_000,
+  ): Promise<boolean> {
+    const clean = parseHandle(handle);
+    if (!clean) return false;
+    return this.mutex.runExclusive(async () => {
+      const snap = await this.readSnapshot();
+      const prev = snap.push?.[clean] ?? this.pushStates.get(clean);
+      if (!prev || prev.subscriptions.length === 0) return false;
+      const now = Date.now();
+      if (now - prev.lastNotifiedAt < windowMs) return false;
+      const nextState: PushState = { ...prev, lastNotifiedAt: now };
+      this.pushStates.set(clean, nextState);
+      snap.push = { ...(snap.push ?? {}), [clean]: nextState };
+      await this.writeSnapshot(snap);
+      return true;
     });
   }
 }

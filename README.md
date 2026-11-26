@@ -150,6 +150,7 @@ The container pre-creates `/app/.data` owned by `nextjs:nodejs` (configurable vi
 | `HOHO_HANDLE_HOURLY_LIMIT` | Optional | `200` | Total notes allowed per tree per hour |
 | `HOHO_MODERATION_PROVIDER` | Optional | Off | Set `openai` with `OPENAI_API_KEY` for optional `omni-moderation-latest` check |
 | `OPENAI_API_KEY` | Optional | — | API key used only when `HOHO_MODERATION_PROVIDER=openai` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_*` | Optional | Off | VAPID public/private keys & subject (`mailto:...`) enabling owner Web Push alerts |
 
 ---
 

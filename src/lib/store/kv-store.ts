@@ -6,6 +6,7 @@ import type {
   AppendMessageResult,
   MailSummary,
   MessagePatch,
+  StoredPushSubscription,
   StoredTreeRecord,
   TreeMeta,
   TreeStore,
@@ -38,6 +39,12 @@ function kUnread(h: string): string {
 }
 function kIdem(h: string, key: string): string {
   return `${KV_V2_PREFIX}idem:${h}:${key}`;
+}
+function kPush(h: string): string {
+  return `${KV_V2_PREFIX}push:${h}`;
+}
+function kPushCooldown(h: string): string {
+  return `${KV_V2_PREFIX}push_cd:${h}`;
 }
 
 export class KvTreeStore implements TreeStore {
@@ -495,5 +502,65 @@ export class KvTreeStore implements TreeStore {
       latestSeq: Number(seqRaw) || 0,
       total: Number(totalRaw) || 0,
     };
+  }
+
+  async listPushSubscriptions(
+    handle: string,
+  ): Promise<StoredPushSubscription[]> {
+    const clean = parseHandle(handle);
+    if (!clean) return [];
+    const raw = await this.exec(["GET", kPush(clean)]);
+    if (typeof raw !== "string") return [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? (parsed as StoredPushSubscription[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async upsertPushSubscription(
+    handle: string,
+    sub: StoredPushSubscription,
+    maxDevices = 5,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    const existing = await this.listPushSubscriptions(clean);
+    const filtered = existing.filter((item) => item.endpoint !== sub.endpoint);
+    const nextSubs = [...filtered, sub].slice(-Math.max(1, maxDevices));
+    await this.exec(["SET", kPush(clean), JSON.stringify(nextSubs)]);
+    return nextSubs.length;
+  }
+
+  async removePushSubscription(
+    handle: string,
+    endpoint: string,
+  ): Promise<number> {
+    const clean = parseHandle(handle);
+    if (!clean) return 0;
+    const existing = await this.listPushSubscriptions(clean);
+    const nextSubs = existing.filter((item) => item.endpoint !== endpoint);
+    await this.exec(["SET", kPush(clean), JSON.stringify(nextSubs)]);
+    return nextSubs.length;
+  }
+
+  async claimPushCoalesceWindow(
+    handle: string,
+    windowMs = 60_000,
+  ): Promise<boolean> {
+    const clean = parseHandle(handle);
+    if (!clean) return false;
+    const subs = await this.listPushSubscriptions(clean);
+    if (subs.length === 0) return false;
+    const res = await this.exec([
+      "SET",
+      kPushCooldown(clean),
+      "1",
+      "PX",
+      Math.max(1000, windowMs),
+      "NX",
+    ]);
+    return res === "OK";
   }
 }

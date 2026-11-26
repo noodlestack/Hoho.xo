@@ -22,7 +22,9 @@ import {
   selectTreeStore,
   type IdempotencyEntry,
   type MailSummary,
+  type PushState,
   type StoreAdapters,
+  type StoredPushSubscription,
   type StoredTreeRecord,
   type TreeMeta,
   type TreeStore,
@@ -46,7 +48,7 @@ export {
   RATE_LIMIT_POLICY,
   type RateLimitResult,
 };
-export type { StoredTreeRecord, MailSummary };
+export type { StoredTreeRecord, MailSummary, StoredPushSubscription };
 
 export interface PublicOrnamentStub {
   id: string;
@@ -79,6 +81,7 @@ const VALID_REPORT_REASONS = new Set<ReportReason>([
 interface SharedStoreState {
   memoryTrees: Map<string, StoredTreeRecord>;
   idempotency: Map<string, Map<string, IdempotencyEntry>>;
+  pushStates: Map<string, PushState>;
   fsUnavailable: boolean;
   adapters?: StoreAdapters;
 }
@@ -114,6 +117,7 @@ function getSharedState(): SharedStoreState {
     globalForHohoStore.__hohoSharedStore = {
       memoryTrees: new Map<string, StoredTreeRecord>(),
       idempotency: new Map<string, Map<string, IdempotencyEntry>>(),
+      pushStates: new Map<string, PushState>(),
       fsUnavailable: false,
     };
   }
@@ -124,6 +128,7 @@ function getSharedState(): SharedStoreState {
       getFilePath: getStoreFilePath,
       memoryTrees: state.memoryTrees,
       idempotency: state.idempotency,
+      pushStates: state.pushStates,
       markFsUnavailable: () => {
         state.fsUnavailable = true;
       },
@@ -183,6 +188,7 @@ export function resetMemoryStoreForTests(): void {
   const state = getSharedState();
   state.memoryTrees.clear();
   state.idempotency.clear();
+  state.pushStates.clear();
   state.fsUnavailable = false;
   resetRateLimitForTests();
 }
@@ -752,4 +758,32 @@ export async function getOwnerMailSummary(
     return null;
   }
   return store.summary(handle);
+}
+
+export async function listOwnerPushSubscriptions(
+  handle: string,
+): Promise<StoredPushSubscription[]> {
+  return getActiveTreeStore().listPushSubscriptions(handle);
+}
+
+export async function upsertOwnerPushSubscription(
+  handle: string,
+  sub: StoredPushSubscription,
+  maxDevices = 5,
+): Promise<number> {
+  return getActiveTreeStore().upsertPushSubscription(handle, sub, maxDevices);
+}
+
+export async function removeOwnerPushSubscription(
+  handle: string,
+  endpoint: string,
+): Promise<number> {
+  return getActiveTreeStore().removePushSubscription(handle, endpoint);
+}
+
+export async function claimOwnerPushCoalesceWindow(
+  handle: string,
+  windowMs = 60_000,
+): Promise<boolean> {
+  return getActiveTreeStore().claimPushCoalesceWindow(handle, windowMs);
 }
