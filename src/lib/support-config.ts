@@ -1,4 +1,5 @@
-export type SupportChannelId = "kofi" | "buymeacoffee" | "github-sponsors";
+export type SupportChannelId =
+  "kofi" | "buymeacoffee" | "paypal" | "patreon" | "github-sponsors" | "custom";
 
 export interface SupportChannel {
   id: SupportChannelId;
@@ -30,9 +31,29 @@ export function getSupportChannels(
   const bmcRaw = env
     ? env.NEXT_PUBLIC_BUYMEACOFFEE_URL
     : process.env.NEXT_PUBLIC_BUYMEACOFFEE_URL;
+  const paypalRaw = env
+    ? env.NEXT_PUBLIC_PAYPAL_URL
+    : process.env.NEXT_PUBLIC_PAYPAL_URL;
+  const patreonRaw = env
+    ? env.NEXT_PUBLIC_PATREON_URL
+    : process.env.NEXT_PUBLIC_PATREON_URL;
   const sponsorsRaw = env
     ? env.NEXT_PUBLIC_GITHUB_SPONSORS_URL
     : process.env.NEXT_PUBLIC_GITHUB_SPONSORS_URL;
+  const customUrlRaw = env
+    ? env.NEXT_PUBLIC_CUSTOM_SUPPORT_URL
+    : process.env.NEXT_PUBLIC_CUSTOM_SUPPORT_URL;
+  const customLabelRaw = env
+    ? env.NEXT_PUBLIC_CUSTOM_SUPPORT_LABEL
+    : process.env.NEXT_PUBLIC_CUSTOM_SUPPORT_LABEL;
+  const customDescRaw = env
+    ? env.NEXT_PUBLIC_CUSTOM_SUPPORT_DESC
+    : process.env.NEXT_PUBLIC_CUSTOM_SUPPORT_DESC;
+
+  const customLabel = customLabelRaw?.trim().slice(0, 48) || "Support Hoho.xo";
+  const customDesc =
+    customDescRaw?.trim().slice(0, 100) ||
+    "Optional direct tip to help keep Hoho.xo free";
 
   const candidates: Array<{
     id: SupportChannelId;
@@ -43,7 +64,7 @@ export function getSupportChannels(
     {
       id: "kofi",
       label: "Support on Ko-fi",
-      description: "One-time hot cocoa tip (0% platform fee on tips)",
+      description: "One-time tip (0% platform fee on tips)",
       raw: kofiRaw,
     },
     {
@@ -53,10 +74,28 @@ export function getSupportChannels(
       raw: bmcRaw,
     },
     {
+      id: "paypal",
+      label: "Tip via PayPal",
+      description: "Direct one-time tip via PayPal.me",
+      raw: paypalRaw,
+    },
+    {
+      id: "patreon",
+      label: "Support on Patreon",
+      description: "Optional monthly backing for ongoing updates",
+      raw: patreonRaw,
+    },
+    {
       id: "github-sponsors",
       label: "GitHub Sponsors",
       description: "Back open-source maintenance on GitHub",
       raw: sponsorsRaw,
+    },
+    {
+      id: "custom",
+      label: customLabel,
+      description: customDesc,
+      raw: customUrlRaw,
     },
   ];
 

@@ -159,23 +159,23 @@ docker run --rm -p 3000:3000 -e NEXT_PUBLIC_SITE_URL=https://your-domain.com -v 
 
 ### Environment Variables
 
-| Variable                                                    | Required      | Default                       | Purpose                                                                       |
-| :---------------------------------------------------------- | :------------ | :---------------------------- | :---------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL`                                      | Recommended   | `http://localhost:3000` (dev) | Canonical origin for metadata, OG cards, and same-origin checks               |
-| `HOHO_IP_SALT`                                              | Yes (prod)    | Dev fallback in non-prod      | Secret salt for HMAC-SHA256 rate-limit IP hashing                             |
-| `HOHO_TRUSTED_PROXY`                                        | Recommended   | `none`                        | Client IP header source: `vercel`, `cloudflare`, or `none`                    |
-| `UPSTASH_REDIS_REST_URL` / `TOKEN`                          | Yes on Vercel | —                             | Upstash Redis REST credentials (also accepts `KV_REST_API_*`)                 |
-| `HOHO_REQUIRE_DURABLE`                                      | Optional      | Unset                         | Set `1` in production to return `503` if KV is unconfigured                   |
-| `HOHO_STORE_FILE`                                           | Optional      | `.data/hoho-store.json`       | Custom JSON store path for self-hosted file mode                              |
-| `HOHO_MAX_MESSAGES_PER_TREE`                                | Optional      | `1000`                        | Maximum stored notes per tree before returning `429`                          |
-| `HOHO_GLOBAL_MSG_LIMIT`                                     | Optional      | `20`                          | Global per-IP message submissions allowed per 10 minutes                      |
-| `HOHO_HANDLE_HOURLY_LIMIT`                                  | Optional      | `200`                         | Total notes allowed per tree per hour                                         |
-| `HOHO_MODERATION_PROVIDER`                                  | Optional      | Off                           | Set `openai` with `OPENAI_API_KEY` for `omni-moderation-latest` check         |
-| `OPENAI_API_KEY`                                            | Optional      | —                             | API key used only when `HOHO_MODERATION_PROVIDER=openai`                      |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_*`                  | Optional      | Off                           | VAPID keys & `mailto:` subject enabling owner Web Push alerts                 |
-| `NEXT_PUBLIC_KOFI_URL` / `BUYMEACOFFEE` / `GITHUB_SPONSORS` | Optional      | Off                           | HTTPS donation URLs displayed only inside Owner Studio `Support` sheet        |
-| `NEXT_PUBLIC_SUPPORT_TIP_NOTE`                              | Optional      | —                             | Short maintainer note shown in Owner Studio `Support` sheet                   |
-| `HOHO_SUPPORTER_CODES`                                      | Optional      | —                             | Comma-separated codes unlocking the cosmetic Golden Star halo in Owner Studio |
+| Variable                                                                                                  | Required      | Default                       | Purpose                                                                                                            |
+| :-------------------------------------------------------------------------------------------------------- | :------------ | :---------------------------- | :----------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                                                                                    | Recommended   | `http://localhost:3000` (dev) | Canonical origin for metadata, OG cards, and same-origin checks                                                    |
+| `HOHO_IP_SALT`                                                                                            | Yes (prod)    | Dev fallback in non-prod      | Secret salt for HMAC-SHA256 rate-limit IP hashing                                                                  |
+| `HOHO_TRUSTED_PROXY`                                                                                      | Recommended   | `none`                        | Client IP header source: `vercel`, `cloudflare`, or `none`                                                         |
+| `UPSTASH_REDIS_REST_URL` / `TOKEN`                                                                        | Yes on Vercel | —                             | Upstash Redis REST credentials (also accepts `KV_REST_API_*`)                                                      |
+| `HOHO_REQUIRE_DURABLE`                                                                                    | Optional      | Unset                         | Set `1` in production to return `503` if KV is unconfigured                                                        |
+| `HOHO_STORE_FILE`                                                                                         | Optional      | `.data/hoho-store.json`       | Custom JSON store path for self-hosted file mode                                                                   |
+| `HOHO_MAX_MESSAGES_PER_TREE`                                                                              | Optional      | `1000`                        | Maximum stored notes per tree before returning `429`                                                               |
+| `HOHO_GLOBAL_MSG_LIMIT`                                                                                   | Optional      | `20`                          | Global per-IP message submissions allowed per 10 minutes                                                           |
+| `HOHO_HANDLE_HOURLY_LIMIT`                                                                                | Optional      | `200`                         | Total notes allowed per tree per hour                                                                              |
+| `HOHO_MODERATION_PROVIDER`                                                                                | Optional      | Off                           | Set `openai` with `OPENAI_API_KEY` for `omni-moderation-latest` check                                              |
+| `OPENAI_API_KEY`                                                                                          | Optional      | —                             | API key used only when `HOHO_MODERATION_PROVIDER=openai`                                                           |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_*`                                                                | Optional      | Off                           | VAPID keys & `mailto:` subject enabling owner Web Push alerts                                                      |
+| `NEXT_PUBLIC_KOFI_URL` / `BUYMEACOFFEE` / `PAYPAL` / `PATREON` / `GITHUB_SPONSORS` / `CUSTOM_SUPPORT_URL` | Optional      | Off                           | HTTPS donation URLs displayed only inside Owner Studio `Support` sheet (`CUSTOM_SUPPORT_LABEL` / `_DESC` optional) |
+| `NEXT_PUBLIC_SUPPORT_TIP_NOTE`                                                                            | Optional      | —                             | Short maintainer note shown in Owner Studio `Support` sheet                                                        |
+| `HOHO_SUPPORTER_CODES`                                                                                    | Optional      | —                             | Comma-separated codes unlocking the cosmetic Golden Star halo in Owner Studio                                      |
 
 ---
 

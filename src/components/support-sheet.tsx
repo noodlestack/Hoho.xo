@@ -1,9 +1,37 @@
 "use client";
 
-import { Check, Coffee, ExternalLink, Heart, Sparkles, X } from "lucide-react";
+import {
+  Check,
+  Coffee,
+  ExternalLink,
+  Gift,
+  Heart,
+  Sparkles,
+  Wallet,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Drawer } from "vaul";
-import { getOptionalTipNote, getSupportChannels } from "@/lib/support-config";
+import {
+  getOptionalTipNote,
+  getSupportChannels,
+  type SupportChannelId,
+} from "@/lib/support-config";
+
+function renderChannelIcon(id: SupportChannelId) {
+  switch (id) {
+    case "kofi":
+    case "buymeacoffee":
+      return <Coffee size={17} strokeWidth={2} />;
+    case "paypal":
+      return <Wallet size={17} strokeWidth={2} />;
+    case "custom":
+      return <Gift size={17} strokeWidth={2} />;
+    case "patreon":
+    case "github-sponsors":
+      return <Heart size={17} strokeWidth={2} />;
+  }
+}
 
 interface SupportSheetProps {
   open: boolean;
@@ -121,11 +149,7 @@ export function SupportSheet({
                   className="support-channel-item"
                 >
                   <span className="support-channel-icon" aria-hidden="true">
-                    {channel.id === "buymeacoffee" ? (
-                      <Coffee size={17} strokeWidth={2} />
-                    ) : (
-                      <Heart size={17} strokeWidth={2} />
-                    )}
+                    {renderChannelIcon(channel.id)}
                   </span>
                   <span className="support-channel-text">
                     <strong>{channel.label}</strong>

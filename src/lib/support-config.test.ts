@@ -48,10 +48,37 @@ describe("support-config and supporter perk safety", () => {
     const channels = getSupportChannels({
       NEXT_PUBLIC_KOFI_URL: "https://ko-fi.com/hohoxo",
       NEXT_PUBLIC_BUYMEACOFFEE_URL: "http://insecure.example.com/x",
+      NEXT_PUBLIC_PAYPAL_URL: "https://paypal.me/hohoxo",
+      NEXT_PUBLIC_PATREON_URL: "https://patreon.com/hohoxo",
       NEXT_PUBLIC_GITHUB_SPONSORS_URL:
         "https://github.com/sponsors/noodlestack",
+      NEXT_PUBLIC_CUSTOM_SUPPORT_URL: "https://tips.example.com/hoho",
+      NEXT_PUBLIC_CUSTOM_SUPPORT_LABEL: `  ${"A".repeat(60)}  `,
+      NEXT_PUBLIC_CUSTOM_SUPPORT_DESC: `  ${"B".repeat(120)}  `,
     });
-    expect(channels.map((c) => c.id)).toEqual(["kofi", "github-sponsors"]);
+    expect(channels.map((c) => c.id)).toEqual([
+      "kofi",
+      "paypal",
+      "patreon",
+      "github-sponsors",
+      "custom",
+    ]);
+    const customChannel = channels.find((c) => c.id === "custom");
+    expect(customChannel?.label).toBe("A".repeat(48));
+    expect(customChannel?.description).toBe("B".repeat(100));
+
+    const defaultCustom = getSupportChannels({
+      NEXT_PUBLIC_CUSTOM_SUPPORT_URL: "https://tips.example.com/hoho",
+    });
+    expect(defaultCustom).toEqual([
+      {
+        id: "custom",
+        label: "Support Hoho.xo",
+        description: "Optional direct tip to help keep Hoho.xo free",
+        url: "https://tips.example.com/hoho",
+      },
+    ]);
+
     expect(getSupportChannels({})).toEqual([]);
     expect(getOptionalTipNote({})).toBeNull();
     expect(
