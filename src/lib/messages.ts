@@ -1,3 +1,4 @@
+import { EXTRA_BLOCKED_TERMS } from "./moderation-lexicon";
 import { parseHandle } from "./tree-config";
 
 export type MessageStatus = "visible" | "reported";
@@ -40,9 +41,53 @@ const BLOCK_PATTERNS: RegExp[] = [
   /https?:\/\//i,
   /\b(?:www\.)?[a-z0-9-]+\.(?:com|net|org|io|app|ph|gg|xyz|co|me|ly|link)\b/i,
   /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/i,
-  /(?:\+?\d[\d\s\-().]{7,}\d)/,
   /\b(?:kys|kill yourself|go die|doxx|swatting)\b/i,
 ];
+
+function isDateLikeSpan(span: string): boolean {
+  const trimmed = span.trim();
+  if (/^\d{1,2}[\s./-]\d{1,2}(?:[\s./-]\d{2,4})?$/.test(trimmed)) {
+    return true;
+  }
+  if (/^\d{4}[\s./-]\d{1,2}[\s./-]\d{1,2}$/.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+export function containsPhoneNumber(input: string): boolean {
+  const clean = input
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, "");
+  const matches = clean.match(/\+?\d[\d\s\-()./]{6,}\d/g);
+  if (!matches) return false;
+  for (const span of matches) {
+    if (isDateLikeSpan(span)) continue;
+    const digits = span.replace(/\D/g, "");
+    if (digits.length >= 9) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsExtraBlockedTerm(normalizedBody: string): boolean {
+  for (const rawTerm of EXTRA_BLOCKED_TERMS) {
+    const term = normalizeForModeration(rawTerm);
+    if (!term) continue;
+    const re = new RegExp(
+      `(?:^|[^a-z0-9])${escapeRegex(term)}(?:$|[^a-z0-9])`,
+    );
+    if (re.test(normalizedBody)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const SELF_HARM_PATTERNS: RegExp[] = [
   /\b(?:suicide|self harm|self-harm|end my life|hurt myself|want to die)\b/i,
@@ -102,6 +147,22 @@ export function classifyMessage(
           "Links, phone numbers, email addresses, and harmful content are blocked for safety.",
       };
     }
+  }
+
+  if (containsPhoneNumber(trimmed)) {
+    return {
+      decision: "reject",
+      reason:
+        "Links, phone numbers, email addresses, and harmful content are blocked for safety.",
+    };
+  }
+
+  if (containsExtraBlockedTerm(normalized)) {
+    return {
+      decision: "reject",
+      reason:
+        "Links, phone numbers, email addresses, and harmful content are blocked for safety.",
+    };
   }
 
   if (mutedWordsCsv.trim().length > 0) {

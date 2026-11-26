@@ -4,6 +4,9 @@ import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import robots from "../app/robots";
 import { CRISIS_RESOURCES, getDefaultCrisisResource } from "./crisis-resources";
+import { checkExternalModeration } from "./external-moderation";
+import { classifyMessage, normalizeForModeration } from "./messages";
+import { EXTRA_BLOCKED_TERMS } from "./moderation-lexicon";
 import { FileTreeStore, KvTreeStore, MemoryTreeStore } from "./store";
 import { defaultTreeConfig } from "./tree-config";
 import {
@@ -953,5 +956,108 @@ describe("Task 1.6 self-harm support notice and crisis resources", () => {
     const rec = await getTreeRecord("supporttree");
     expect(rec?.messages).toHaveLength(1);
     expect(rec?.messages[0].body).toBe("I want to end my life");
+  });
+});
+
+describe("Task 2.1 moderation phone vs date refinement, lexicon hook, and optional OpenAI layer", () => {
+  it("allows holiday dates and benign numbers while blocking real and obfuscated phone numbers", () => {
+    const allowed = [
+      "see you 25 12 2026",
+      "Merry Christmas 2026!",
+      "Dec 25, 2026",
+      "I got 100 out of 100",
+      "2026-12-25",
+      "12/25",
+    ];
+    for (const text of allowed) {
+      expect(classifyMessage(text).decision).toBe("allow");
+    }
+
+    const blockedPhones = [
+      "call 0917 123 4567",
+      "+63 917 123 4567",
+      "09171234567",
+      "0 9 1 7 1 2 3 4 5 6 7",
+    ];
+    for (const text of blockedPhones) {
+      expect(classifyMessage(text).decision).toBe("reject");
+    }
+  });
+
+  it("preserves existing moderation patterns and normalizeForModeration", () => {
+    expect(normalizeForModeration("h\u200be\u0301lllooo 133054@$")).toBe(
+      "helloo ieeosaas",
+    );
+    expect(classifyMessage("https://example.com").decision).toBe("reject");
+    expect(classifyMessage("dm me test@example.com").decision).toBe("reject");
+    expect(classifyMessage("go d0xx someone").decision).toBe("reject");
+  });
+
+  it("enforces EXTRA_BLOCKED_TERMS with word boundaries while allowing unrelated substrings", () => {
+    EXTRA_BLOCKED_TERMS.push("flarp");
+    try {
+      expect(classifyMessage("You are a flarp!").decision).toBe("reject");
+      expect(classifyMessage("Notice the flarpwood ornament").decision).toBe(
+        "allow",
+      );
+    } finally {
+      EXTRA_BLOCKED_TERMS.pop();
+    }
+  });
+
+  it("keeps external moderation off by default, rejects flagged categories when enabled, and fails open on timeout", async () => {
+    const prevProvider = process.env.HOHO_MODERATION_PROVIDER;
+    const prevKey = process.env.OPENAI_API_KEY;
+    delete process.env.HOHO_MODERATION_PROVIDER;
+    delete process.env.OPENAI_API_KEY;
+
+    expect(await checkExternalModeration("Hello")).toEqual({ reject: false });
+
+    process.env.HOHO_MODERATION_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "sk-test";
+
+    const rejectSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          results: [{ categories: { harassment: true, sexual: false } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    try {
+      const flagged = await checkExternalModeration("mean text");
+      expect(flagged.reject).toBe(true);
+    } finally {
+      rejectSpy.mockRestore();
+    }
+
+    const allowSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          results: [{ categories: { harassment: false, violence: false } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    try {
+      const clean = await checkExternalModeration("merry christmas");
+      expect(clean).toEqual({ reject: false });
+    } finally {
+      allowSpy.mockRestore();
+    }
+
+    const timeoutSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("Request timed out"));
+    try {
+      const timedOut = await checkExternalModeration("merry christmas");
+      expect(timedOut).toEqual({ reject: false });
+    } finally {
+      timeoutSpy.mockRestore();
+      if (prevProvider === undefined) delete process.env.HOHO_MODERATION_PROVIDER;
+      else process.env.HOHO_MODERATION_PROVIDER = prevProvider;
+      if (prevKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = prevKey;
+    }
   });
 });

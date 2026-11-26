@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { checkExternalModeration } from "./external-moderation";
 import {
   classifyMessage,
   type ReportReason,
@@ -606,6 +607,15 @@ export async function addAnonymousMessage(
       ok: false,
       status: 400,
       error: verdict.reason ?? "Please adjust your message.",
+    };
+  }
+
+  const externalVerdict = await checkExternalModeration(rawBody);
+  if (externalVerdict.reject) {
+    return {
+      ok: false,
+      status: 400,
+      error: externalVerdict.reason ?? "Please adjust your message.",
     };
   }
 
