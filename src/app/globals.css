@@ -2055,7 +2055,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-dim);
 }
 

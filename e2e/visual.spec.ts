@@ -29,6 +29,7 @@ test.describe("Hoho.xo visual regression snapshots", () => {
       await page.goto("/?static=1");
       await page.evaluate(async () => {
         await document.fonts.ready;
+        await new Promise((r) => setTimeout(r, 350));
         await new Promise((r) =>
           requestAnimationFrame(() => requestAnimationFrame(r)),
         );
@@ -45,6 +46,7 @@ test.describe("Hoho.xo visual regression snapshots", () => {
       await page.goto("/t/e2e_visual?static=1");
       await page.evaluate(async () => {
         await document.fonts.ready;
+        await new Promise((r) => setTimeout(r, 350));
         await new Promise((r) =>
           requestAnimationFrame(() => requestAnimationFrame(r)),
         );

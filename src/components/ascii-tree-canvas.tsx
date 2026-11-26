@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTreeLayout } from "@/components/hoho/use-tree-layout";
 import { gsap } from "@/lib/gsap-init";
 import type { TreeMessage } from "@/lib/messages";
+import { getOrnamentSpriteCanvas } from "@/lib/ornament-sprites";
 import {
   generateQrTreeCloud,
   mulberry32,
@@ -1393,7 +1394,6 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           const color =
             ORNAMENT_COLORS[item.colorIdx % ORNAMENT_COLORS.length] ??
             "#F5C451";
-          const style = ORNAMENT_TYPES[item.ornamentType] ?? ORNAMENT_TYPES[0];
           const isUnread = !item.readAt;
           const isHovered = hoveredIdRef.current === item.id;
           const depthDim = dz < -0.6 ? 0.78 : 1;
@@ -1411,14 +1411,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
           const ox = sx + wiggleOffset;
           const oy = sy;
-          // ~1.6x foliage cell size so ornaments read as distinct hanging jewels
-          const diskR = isDenseOrnaments
-            ? isCompact
-              ? 10
-              : 11.8
-            : isCompact
-              ? 13.5
-              : 15.5;
+          const diskR = isDenseOrnaments ? 9 : isCompact ? 12 : 14;
 
           ctx.save();
           ctx.globalAlpha = ornamentAlpha * depthDim * (isUnread ? 1 : 0.86);
@@ -1448,84 +1441,23 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             ctx.restore();
           }
 
-          // Wide soft halo behind ornament
-          const haloR = isDenseOrnaments
-            ? isUnread
-              ? 20
-              : 14
-            : isUnread
-              ? 30
-              : 21;
-          const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, haloR);
-          halo.addColorStop(
-            0,
-            isUnread ? "rgba(245, 196, 81, 0.36)" : "rgba(242, 237, 228, 0.16)",
-          );
-          halo.addColorStop(1, "rgba(11, 13, 18, 0)");
-          ctx.fillStyle = halo;
-          ctx.beginPath();
-          ctx.arc(0, 0, haloR, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Dark backing disk for crisp legibility over foliage
-          ctx.fillStyle = "rgba(11, 13, 18, 0.88)";
-          ctx.beginPath();
-          ctx.arc(0, 0, diskR, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Outline ring (+ crisp focus/hover halo)
-          ctx.strokeStyle = isHovered
-            ? "#F1EDE4"
-            : isUnread
-              ? "#F5C451"
-              : color;
-          ctx.lineWidth = isHovered ? 2 : isUnread ? 1.6 : 1.1;
-          ctx.stroke();
-
-          if (isHovered) {
-            ctx.save();
-            ctx.globalAlpha *= 0.5;
-            ctx.strokeStyle = "#F5C451";
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.arc(0, 0, diskR + 4, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-          }
-
-          // Top-left specular bauble dot
-          ctx.save();
-          ctx.globalAlpha *= 0.55;
-          ctx.fillStyle = "#FFFFFF";
-          ctx.beginPath();
-          ctx.arc(
-            -diskR * 0.38,
-            -diskR * 0.38,
-            Math.max(1.4, diskR * 0.14),
-            0,
-            Math.PI * 2,
-          );
-          ctx.fill();
-          ctx.restore();
-
-          // Saturated ornament glyph
-          ctx.fillStyle = color;
-          ctx.font = `700 ${
-            isDenseOrnaments ? (isCompact ? 11.5 : 13.5) : isCompact ? 15 : 18
-          }px ${fontFamily}`;
-          ctx.fillText(style.glyph, 0, 0.5);
-
-          if (isUnread) {
-            ctx.fillStyle = "#F5C451";
-            ctx.beginPath();
-            ctx.arc(
-              diskR * 0.72,
-              -diskR * 0.72,
-              isDenseOrnaments ? 2.2 : 2.8,
-              0,
-              Math.PI * 2,
+          const sprite = getOrnamentSpriteCanvas({
+            typeId: item.ornamentType,
+            color,
+            radius: diskR,
+            unread: isUnread,
+            hovered: isHovered,
+            dpr,
+          });
+          if (sprite) {
+            const halfSprite = sprite.logicalSize / 2;
+            ctx.drawImage(
+              sprite.canvas,
+              -halfSprite,
+              -halfSprite,
+              sprite.logicalSize,
+              sprite.logicalSize,
             );
-            ctx.fill();
           }
 
           ctx.restore();
@@ -1534,7 +1466,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             id: item.id,
             x: ox,
             y: oy,
-            r: isDenseOrnaments ? (isCompact ? 22 : 19) : isCompact ? 34 : 28,
+            r: isDenseOrnaments ? (isCompact ? 22 : 16) : isCompact ? 28 : 22,
           });
         }
       }
@@ -1687,6 +1619,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   function findOrnamentAt(
     clientX: number,
     clientY: number,
+    pointerType = "mouse",
   ): { ornament: ResolvedOrnament; hit: ProjectedOrnamentHit } | null {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -1698,8 +1631,9 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     let best: { hit: ProjectedOrnamentHit; dist: number } | null = null;
     for (let i = hits.length - 1; i >= 0; i -= 1) {
       const hit = hits[i];
+      const hitRadius = Math.max(hit.r, pointerType === "touch" ? 24 : 15);
       const d = Math.hypot(x - hit.x, y - hit.y);
-      if (d <= hit.r && (!best || d < best.dist)) {
+      if (d <= hitRadius && (!best || d < best.dist)) {
         best = { hit, dist: d };
       }
     }
@@ -1815,7 +1749,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               return;
             }
             if (event.pointerType === "mouse") {
-              const hovered = findOrnamentAt(event.clientX, event.clientY);
+              const hovered = findOrnamentAt(
+                event.clientX,
+                event.clientY,
+                event.pointerType,
+              );
               const nextHoveredId = hovered ? hovered.ornament.id : null;
               if (hoveredIdRef.current !== nextHoveredId) {
                 hoveredIdRef.current = nextHoveredId;
@@ -1850,7 +1788,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             dragStateRef.current.active = false;
             if (wasMoved) return;
 
-            const found = findOrnamentAt(event.clientX, event.clientY);
+            const found = findOrnamentAt(
+              event.clientX,
+              event.clientY,
+              event.pointerType,
+            );
             if (found) {
               if (!isOwnerMode) {
                 wiggleRef.current = {

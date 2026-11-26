@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { loadCanvasFont } from "./canvas-font";
 import type { TreeMessage } from "./messages";
+import { drawOrnamentSilhouette } from "./ornament-sprites";
 import type { TreeConfig } from "./tree-config";
 import { ORNAMENT_COLORS, ORNAMENT_TYPES, type TreeTheme } from "./tree-themes";
 
@@ -315,13 +316,39 @@ export async function renderStoryCardDataUrl(
   ctx.textAlign = "center";
   ctx.fillText(`★  ${headerName.toUpperCase()}  ★`, width / 2, 156);
 
-  ctx.fillStyle = ornamentColor;
+  ctx.save();
   ctx.font = `600 24px ${monoFont}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const subtitleLabel = `ANONYMOUS NOTE · ${ornament.name.toUpperCase()}`;
+  const labelWidth = ctx.measureText(subtitleLabel).width;
+  const badgeR = 16;
+  const badgeGap = 12;
+  const totalRowW = badgeR * 2 + badgeGap + labelWidth;
+  const rowLeftX = (width - totalRowW) / 2;
+  const badgeCenterX = rowLeftX + badgeR;
+  const rowCenterY = 208;
+
+  ctx.fillStyle = "rgba(11, 13, 18, 0.9)";
+  ctx.beginPath();
+  ctx.arc(badgeCenterX, rowCenterY, badgeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = ornamentColor;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.translate(badgeCenterX, rowCenterY);
+  drawOrnamentSilhouette(ctx, message.ornamentType, 11, ornamentColor);
+  ctx.restore();
+
+  ctx.fillStyle = ornamentColor;
   ctx.fillText(
-    `ANONYMOUS NOTE · ${ornament.name.toUpperCase()} (${ornament.glyph})`,
-    width / 2,
-    210,
+    subtitleLabel,
+    rowLeftX + badgeR * 2 + badgeGap + labelWidth / 2,
+    rowCenterY,
   );
+  ctx.restore();
 
   // Optional NGL-style Prompt Ribbon (never renders message timestamps or sender identity)
   const clampedReply = clampStoryReply(options.reply);

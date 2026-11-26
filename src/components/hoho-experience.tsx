@@ -50,6 +50,7 @@ import {
 import { useKeyboardShortcuts } from "@/components/hoho/use-keyboard-shortcuts";
 import { useOwnerMail } from "@/components/hoho/use-owner-mail";
 import { useOwnerSession } from "@/components/hoho/use-owner-session";
+import { OrnamentSpriteIcon } from "@/components/ornament-sprite-icon";
 import {
   classifyMessage,
   loadStoredMessages,
@@ -1593,8 +1594,6 @@ export function HohoExperience({
               </span>
               <div className="ornament-chip-row">
                 {resolvedOrnaments.slice(0, 18).map((item) => {
-                  const styleMeta =
-                    ORNAMENT_TYPES[item.ornamentType] ?? ORNAMENT_TYPES[0];
                   const color =
                     ORNAMENT_COLORS[item.colorIdx] ?? ORNAMENT_COLORS[0];
                   const isUnread = item.readAt === null;
@@ -1611,9 +1610,12 @@ export function HohoExperience({
                           aria-hidden="true"
                         />
                       ) : null}
-                      <span style={{ color }} aria-hidden="true">
-                        {styleMeta.glyph}
-                      </span>
+                      <OrnamentSpriteIcon
+                        typeId={item.ornamentType}
+                        color={color}
+                        size={18}
+                        unread={isUnread}
+                      />
                       <span>#{item.seq}</span>
                     </button>
                   );
@@ -2410,7 +2412,11 @@ export function HohoExperience({
                     }}
                     aria-hidden="true"
                   >
-                    {sentOrnamentMeta?.glyph ?? "*"}
+                    <OrnamentSpriteIcon
+                      typeId={visitorSentOrnament.ornamentType}
+                      color={sentOrnamentColor}
+                      size={32}
+                    />
                   </div>
                   <p className="celebrate-title">
                     Ornament hung on @{activeHandle}&apos;s tree!
@@ -2562,7 +2568,15 @@ export function HohoExperience({
                             className="ornament-pill-glyph"
                             aria-hidden="true"
                           >
-                            {item.glyph}
+                            <OrnamentSpriteIcon
+                              typeId={item.id}
+                              color={
+                                ORNAMENT_COLORS[
+                                  item.id % ORNAMENT_COLORS.length
+                                ] ?? "#F5C451"
+                              }
+                              size={20}
+                            />
                           </span>
                           <span>{item.name}</span>
                         </button>
@@ -2889,9 +2903,19 @@ export function HohoExperience({
                     }}
                     aria-hidden="true"
                   >
-                    {selectedOrnament !== null
-                      ? (ORNAMENT_TYPES[selectedOrnament]?.glyph ?? "*")
-                      : "✨"}
+                    {selectedOrnament !== null ? (
+                      <OrnamentSpriteIcon
+                        typeId={selectedOrnament}
+                        color={
+                          ORNAMENT_COLORS[
+                            selectedOrnament % ORNAMENT_COLORS.length
+                          ] ?? theme.swatch
+                        }
+                        size={18}
+                      />
+                    ) : (
+                      "✨"
+                    )}
                   </span>
                   <span>
                     {selectedOrnament !== null
@@ -2961,7 +2985,11 @@ export function HohoExperience({
                       }}
                       aria-hidden="true"
                     >
-                      {sentOrnamentMeta?.glyph ?? "*"}
+                      <OrnamentSpriteIcon
+                        typeId={visitorSentOrnament.ornamentType}
+                        color={sentOrnamentColor}
+                        size={32}
+                      />
                     </div>
                     <p className="celebrate-title">
                       Ornament hung on @{activeHandle}&apos;s tree!
@@ -3134,7 +3162,15 @@ export function HohoExperience({
                               className="ornament-pill-glyph"
                               aria-hidden="true"
                             >
-                              {item.glyph}
+                              <OrnamentSpriteIcon
+                                typeId={item.id}
+                                color={
+                                  ORNAMENT_COLORS[
+                                    item.id % ORNAMENT_COLORS.length
+                                  ] ?? "#F5C451"
+                                }
+                                size={20}
+                              />
                             </span>
                             <span>{item.name}</span>
                           </button>
