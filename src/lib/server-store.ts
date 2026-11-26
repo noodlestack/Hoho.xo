@@ -172,7 +172,11 @@ export function verifyOwnerToken(token: string, expectedHash: string): boolean {
 
 export function getOwnerCookieName(handle: string): string {
   const clean = parseHandle(handle) ?? "";
-  return `${OWNER_COOKIE_PREFIX}${clean}`;
+  const prefix =
+    process.env.NODE_ENV === "production"
+      ? `__Host-${OWNER_COOKIE_PREFIX}`
+      : OWNER_COOKIE_PREFIX;
+  return `${prefix}${clean}`;
 }
 
 export function buildOwnerCookie(handle: string, token: string): string {
@@ -185,9 +189,6 @@ export function getOwnerTokenFromRequest(
   request: Request,
   handle: string,
 ): string | null {
-  const headerKey = request.headers.get("x-owner-key")?.trim();
-  if (headerKey) return headerKey;
-
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return null;
 
@@ -207,6 +208,98 @@ export function getOwnerTokenFromRequest(
     }
   }
   return null;
+}
+
+function extractRequestOrigin(request: Request): string | null {
+  const originHeader = request.headers.get("origin")?.trim();
+  if (originHeader) {
+    if (originHeader === "null") return null;
+    try {
+      return new URL(originHeader).origin;
+    } catch {
+      return null;
+    }
+  }
+  const refererHeader = request.headers.get("referer")?.trim();
+  if (refererHeader) {
+    try {
+      return new URL(refererHeader).origin;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function assertSameOrigin(
+  request: Request,
+): { ok: true } | { ok: false; status: 403; error: string } {
+  const contentType = request.headers.get("content-type")?.trim() ?? "";
+  const mediaType = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (mediaType !== "application/json") {
+    return {
+      ok: false,
+      status: 403,
+      error: "Cross-origin or invalid request.",
+    };
+  }
+
+  const reqOrigin = extractRequestOrigin(request);
+  if (!reqOrigin) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Cross-origin or invalid request.",
+    };
+  }
+
+  if (process.env.NODE_ENV !== "production" && isLocalhostOrigin(reqOrigin)) {
+    return { ok: true };
+  }
+
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configuredSiteUrl) {
+    try {
+      const allowedOrigin = new URL(configuredSiteUrl).origin;
+      if (reqOrigin === allowedOrigin) {
+        return { ok: true };
+      }
+      return {
+        ok: false,
+        status: 403,
+        error: "Cross-origin or invalid request.",
+      };
+    } catch {
+      // Fall through to request URL origin
+    }
+  }
+
+  try {
+    const selfOrigin = new URL(request.url).origin;
+    if (reqOrigin === selfOrigin) {
+      return { ok: true };
+    }
+  } catch {
+    // Reject below
+  }
+
+  return {
+    ok: false,
+    status: 403,
+    error: "Cross-origin or invalid request.",
+  };
 }
 
 function getIpSalt(): string {

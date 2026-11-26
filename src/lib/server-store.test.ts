@@ -7,10 +7,14 @@ import { FileTreeStore, KvTreeStore, MemoryTreeStore } from "./store";
 import { defaultTreeConfig } from "./tree-config";
 import {
   addAnonymousMessage,
+  assertSameOrigin,
+  buildOwnerCookie,
   checkRateLimit,
   claimOrVerifyTree,
   deleteMessage,
   getClientIpHash,
+  getOwnerCookieName,
+  getOwnerTokenFromRequest,
   getTreeRecord,
   markAllMessagesRead,
   markMessageRead,
@@ -807,5 +811,120 @@ describe("Task 1.4 sliding-window rate limiter and fail-closed KV policy", () =>
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+});
+
+describe("Task 1.5 cookie-only auth and same-origin checks", () => {
+  const savedNodeEnv = process.env.NODE_ENV;
+  const savedSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+  afterAll(() => {
+    if (savedNodeEnv === undefined) {
+      delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV =
+        savedNodeEnv;
+    }
+    if (savedSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = savedSiteUrl;
+  });
+
+  beforeEach(() => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+  });
+
+  it("uses __Host- cookie prefix in production and builds strict cookie attributes", () => {
+    expect(getOwnerCookieName("kai_2026")).toBe("hoho_owner_kai_2026");
+
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    expect(getOwnerCookieName("kai_2026")).toBe("__Host-hoho_owner_kai_2026");
+    const cookie = buildOwnerCookie("kai_2026", "secret_tok");
+    expect(cookie).toContain("__Host-hoho_owner_kai_2026=secret_tok");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).toContain("Path=/");
+    expect(cookie).toContain("Secure");
+    expect(cookie).not.toContain("Domain=");
+  });
+
+  it("authenticates only via HttpOnly cookie and ignores x-owner-key header", () => {
+    const headerOnlyReq = new Request("http://localhost/api/trees/kai/mail", {
+      headers: { "x-owner-key": "secret_tok" },
+    });
+    expect(getOwnerTokenFromRequest(headerOnlyReq, "kai")).toBeNull();
+
+    const cookieReq = new Request("http://localhost/api/trees/kai/mail", {
+      headers: {
+        cookie: "hoho_owner_kai=cookie_secret_tok; other=1",
+        "x-owner-key": "spoofed",
+      },
+    });
+    expect(getOwnerTokenFromRequest(cookieReq, "kai")).toBe(
+      "cookie_secret_tok",
+    );
+  });
+
+  it("rejects missing Origin, foreign Origin, and non-JSON Content-Type in assertSameOrigin", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "https://tree.example.com";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+
+    expect(
+      assertSameOrigin(
+        new Request("https://tree.example.com/api/trees/kai", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://tree.example.com",
+          },
+        }),
+      ),
+    ).toEqual({ ok: true });
+
+    expect(
+      assertSameOrigin(
+        new Request("https://tree.example.com/api/trees/kai", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://evil.example.com",
+          },
+        }).clone(),
+      ).ok,
+    ).toBe(false);
+
+    expect(
+      assertSameOrigin(
+        new Request("https://tree.example.com/api/trees/kai", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+        }),
+      ).ok,
+    ).toBe(false);
+
+    expect(
+      assertSameOrigin(
+        new Request("https://tree.example.com/api/trees/kai", {
+          method: "PATCH",
+          headers: {
+            "content-type": "text/plain",
+            origin: "https://tree.example.com",
+          },
+        }),
+      ).ok,
+    ).toBe(false);
+
+    // Referer fallback works for same origin
+    expect(
+      assertSameOrigin(
+        new Request("https://tree.example.com/api/trees/kai", {
+          method: "DELETE",
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            referer: "https://tree.example.com/t/kai",
+          },
+        }),
+      ).ok,
+    ).toBe(true);
   });
 });

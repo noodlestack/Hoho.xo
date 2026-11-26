@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  assertSameOrigin,
   deleteMessage,
   getOwnerTokenFromRequest,
   markMessageRead,
@@ -13,6 +14,14 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ handle: string; id: string }> },
 ) {
+  const originCheck = assertSameOrigin(request);
+  if (!originCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: originCheck.error },
+      { status: originCheck.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const { handle, id } = await context.params;
   const cleanHandle = parseHandle(handle);
   if (!cleanHandle) {
@@ -81,6 +90,14 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ handle: string; id: string }> },
 ) {
+  const originCheck = assertSameOrigin(request);
+  if (!originCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: originCheck.error },
+      { status: originCheck.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const { handle, id } = await context.params;
   const cleanHandle = parseHandle(handle);
   if (!cleanHandle) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  assertSameOrigin,
   buildOwnerCookie,
   checkRateLimit,
   claimOrVerifyTree,
@@ -12,6 +13,14 @@ import { parseHandle } from "@/lib/tree-config";
 import { claimTreeSchema, formatZodError } from "@/lib/validation";
 
 export async function POST(request: Request) {
+  const originCheck = assertSameOrigin(request);
+  if (!originCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: originCheck.error },
+      { status: originCheck.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -61,7 +70,6 @@ export async function POST(request: Request) {
           ok: true,
           handle: verifiedOwner.handle,
           created: false,
-          ownerKey: candidateToken,
           config: verifiedOwner.config,
           messages: verifiedOwner.messages,
         },

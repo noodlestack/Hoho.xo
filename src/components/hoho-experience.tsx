@@ -118,32 +118,6 @@ function writeVisitorDraft(handle: string, draft: string): void {
   }
 }
 
-const OWNER_KEY_STORAGE_PREFIX = "hoho_xo_owner_key_v1";
-
-function readStoredOwnerKey(handle: string): string {
-  if (typeof window === "undefined") return "";
-  const parsed = parseHandle(handle);
-  if (!parsed) return "";
-  try {
-    return (
-      window.localStorage.getItem(`${OWNER_KEY_STORAGE_PREFIX}:${parsed}`) ?? ""
-    );
-  } catch {
-    return "";
-  }
-}
-
-function writeStoredOwnerKey(handle: string, token: string): void {
-  if (typeof window === "undefined" || !token) return;
-  const parsed = parseHandle(handle);
-  if (!parsed) return;
-  try {
-    window.localStorage.setItem(`${OWNER_KEY_STORAGE_PREFIX}:${parsed}`, token);
-  } catch {
-    // Ignore storage quota errors cleanly
-  }
-}
-
 interface ClaimApiResponse {
   ok?: boolean;
   handle?: string;
@@ -251,7 +225,6 @@ export function HohoExperience({
   const visitorInputRef = useRef<HTMLTextAreaElement | null>(null);
   const hydratedRef = useRef<boolean>(false);
   const activeHandleRef = useRef<string>(initialSafeHandle);
-  const ownerKeyRef = useRef<string>("");
   const serverSyncedRef = useRef<boolean>(Boolean(initialVisitorTree));
   const soundEnabledRef = useRef<boolean>(true);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
@@ -259,10 +232,9 @@ export function HohoExperience({
 
   useEffect(() => {
     activeHandleRef.current = activeHandle;
-    ownerKeyRef.current = ownerKey;
     serverSyncedRef.current = serverSynced;
     soundEnabledRef.current = soundEnabled;
-  }, [activeHandle, ownerKey, serverSynced, soundEnabled]);
+  }, [activeHandle, serverSynced, soundEnabled]);
 
   const seedKnownMessages = useCallback((list: TreeMessage[]) => {
     knownMessageIdsRef.current = new Set(list.map((m) => m.id));
@@ -285,16 +257,8 @@ export function HohoExperience({
     [],
   );
 
-  const ownerAuthHeaders = useCallback(
-    (explicitKey?: string): Record<string, string> => {
-      const k = explicitKey || ownerKeyRef.current;
-      return k ? { "X-Owner-Key": k } : {};
-    },
-    [],
-  );
-
   const refreshOwnerMail = useCallback(
-    async (targetHandle: string, explicitKey?: string) => {
+    async (targetHandle: string) => {
       if (!isOwnerMode || !parseHandle(targetHandle)) return;
       try {
         const res = await fetch(
@@ -302,7 +266,6 @@ export function HohoExperience({
           {
             cache: "no-store",
             credentials: "same-origin",
-            headers: ownerAuthHeaders(explicitKey),
           },
         );
         if (!res.ok) return;
@@ -347,7 +310,7 @@ export function HohoExperience({
         // Offline/transient error ignored cleanly
       }
     },
-    [isOwnerMode, ownerAuthHeaders, seedKnownMessages, showToast],
+    [isOwnerMode, seedKnownMessages, showToast],
   );
 
   const claimOrSyncOwner = useCallback(
@@ -357,8 +320,8 @@ export function HohoExperience({
       seedConfig?: TreeConfig,
     ): Promise<boolean> => {
       if (!isOwnerMode || !parseHandle(targetHandle)) return false;
-      const storedKey = explicitKey || readStoredOwnerKey(targetHandle);
-      const dedupeKey = `${targetHandle}:${storedKey || "anon"}`;
+      const providedKey = explicitKey?.trim() ?? "";
+      const dedupeKey = `${targetHandle}:${providedKey || "cookie"}`;
 
       try {
         let pending = inflightClaims.get(dedupeKey);
@@ -372,23 +335,24 @@ export function HohoExperience({
               },
               body: JSON.stringify({
                 handle: targetHandle,
-                ...(storedKey ? { ownerKey: storedKey } : {}),
+                ...(providedKey ? { ownerKey: providedKey } : {}),
                 ...(seedConfig ? { config: seedConfig } : {}),
               }),
             });
             const data = (await res
               .json()
               .catch(() => ({}))) as ClaimApiResponse;
-            return { status: res.status, data, usedKey: storedKey };
+            return { status: res.status, data, usedKey: providedKey };
           })().finally(() => {
             inflightClaims.delete(dedupeKey);
           });
           inflightClaims.set(dedupeKey, pending);
         }
 
-        const { status, data, usedKey } = await pending;
+        const { status, data } = await pending;
         if (status === 409) {
           setServerSynced(false);
+          setOwnerKey("");
           setOwnerClaimError(
             data.error ??
               `@${targetHandle} is claimed on another device. Enter its Owner Key or choose a new handle.`,
@@ -401,10 +365,10 @@ export function HohoExperience({
           return false;
         }
 
-        const effectiveKey = data.ownerKey || usedKey;
-        if (effectiveKey) {
-          writeStoredOwnerKey(targetHandle, effectiveKey);
-          setOwnerKey(effectiveKey);
+        if (data.created && data.ownerKey) {
+          setOwnerKey(data.ownerKey);
+        } else {
+          setOwnerKey("");
         }
 
         setOwnerClaimError("");
@@ -479,14 +443,13 @@ export function HohoExperience({
           return;
         }
         const storedConfig = loadTreeConfig(resolvedHandle);
-        const savedKey = readStoredOwnerKey(resolvedHandle);
-        if (savedKey) setOwnerKey(savedKey);
+        setOwnerKey("");
         setConfig(storedConfig);
         const initialStored = loadStoredMessages(resolvedHandle);
         seedKnownMessages(initialStored);
         setMessages(initialStored);
         hydratedRef.current = true;
-        await claimOrSyncOwner(resolvedHandle, savedKey, storedConfig);
+        await claimOrSyncOwner(resolvedHandle, undefined, storedConfig);
       } else if (resolvedHandle) {
         const storedConfig = loadTreeConfig(resolvedHandle);
         const savedDraft = readVisitorDraft(resolvedHandle);
@@ -665,13 +628,12 @@ export function HohoExperience({
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
-            ...ownerAuthHeaders(),
           },
           body: JSON.stringify(nextConfig),
         }).catch(() => {});
       }, 320);
     },
-    [isOwnerMode, ownerAuthHeaders],
+    [isOwnerMode],
   );
 
   const updateConfig = useCallback(
@@ -708,11 +670,13 @@ export function HohoExperience({
       saveTreeConfig(nextHandle, localFallbackCfg);
       setActiveHandle(nextHandle);
       setConfig(localFallbackCfg);
+      setOwnerKey("");
 
-      const savedKey = readStoredOwnerKey(nextHandle);
-      setOwnerKey(savedKey);
-
-      const ok = await claimOrSyncOwner(nextHandle, savedKey, localFallbackCfg);
+      const ok = await claimOrSyncOwner(
+        nextHandle,
+        undefined,
+        localFallbackCfg,
+      );
       if (ok) {
         showToast(`Active handle set to @${nextHandle}`);
       } else {
@@ -852,7 +816,6 @@ export function HohoExperience({
               credentials: "same-origin",
               headers: {
                 "Content-Type": "application/json",
-                ...ownerAuthHeaders(),
               },
               body: JSON.stringify({ action: "read" }),
             },
@@ -860,7 +823,7 @@ export function HohoExperience({
         }
       }
     },
-    [activeHandle, isOwnerMode, ownerAuthHeaders, persistMessagesLocal, soundEnabled],
+    [activeHandle, isOwnerMode, persistMessagesLocal, soundEnabled],
   );
 
   const handleSelectOrnament = useCallback(
@@ -886,13 +849,15 @@ export function HohoExperience({
           {
             method: "DELETE",
             credentials: "same-origin",
-            headers: ownerAuthHeaders(),
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
         ).catch(() => {});
       }
       showToast("Note removed from tree and Mail");
     },
-    [activeHandle, ownerAuthHeaders, persistMessagesLocal, showToast],
+    [activeHandle, persistMessagesLocal, showToast],
   );
 
   const handleReportMessage = useCallback(
@@ -919,7 +884,6 @@ export function HohoExperience({
             credentials: "same-origin",
             headers: {
               "Content-Type": "application/json",
-              ...ownerAuthHeaders(),
             },
             body: JSON.stringify({ action: "report", reason }),
           },
@@ -927,7 +891,7 @@ export function HohoExperience({
       }
       showToast("Ornament hidden and saved in Reported Mail");
     },
-    [activeHandle, ownerAuthHeaders, persistMessagesLocal, showToast],
+    [activeHandle, persistMessagesLocal, showToast],
   );
 
   const handleMarkAllRead = useCallback(async () => {
@@ -954,7 +918,6 @@ export function HohoExperience({
             credentials: "same-origin",
             headers: {
               "Content-Type": "application/json",
-              ...ownerAuthHeaders(),
             },
             body: JSON.stringify({ action: "mark_all_read" }),
           },
@@ -977,7 +940,6 @@ export function HohoExperience({
   }, [
     activeHandle,
     messages,
-    ownerAuthHeaders,
     persistMessagesLocal,
     seedKnownMessages,
     showToast,
@@ -2197,7 +2159,7 @@ export function HohoExperience({
                   </div>
                   <p className="tree-meta-line">
                     {ownerKey
-                      ? "Your session is protected by an HttpOnly cookie. Save your key to unlock Mail on another device."
+                      ? "Save this now, it can't be shown again. Your session is protected by an HttpOnly cookie."
                       : "Enter the Owner Access Key for an existing handle to unlock Mail here."}
                   </p>
                   <form className="url-row" onSubmit={handleUnlockWithKey}>

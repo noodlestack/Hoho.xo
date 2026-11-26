@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  assertSameOrigin,
   getOwnerTokenFromRequest,
   markAllMessagesRead,
   verifyTreeOwner,
@@ -48,6 +49,14 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ handle: string }> },
 ) {
+  const originCheck = assertSameOrigin(request);
+  if (!originCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: originCheck.error },
+      { status: originCheck.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const { handle } = await context.params;
   const cleanHandle = parseHandle(handle);
   if (!cleanHandle) {
