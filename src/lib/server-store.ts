@@ -196,11 +196,56 @@ export function getOwnerTokenFromRequest(
   return null;
 }
 
-export function getClientIpHash(request: Request): string {
+function getIpSalt(): string {
+  const configured = process.env.HOHO_IP_SALT?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("HOHO_IP_SALT must be configured in production.");
+  }
+  return "hoho-xo-dev-ip-salt";
+}
+
+function resolveTrustedClientIp(request: Request): string {
+  const mode = (process.env.HOHO_TRUSTED_PROXY || "none").trim().toLowerCase();
+
+  if (mode === "vercel") {
+    const vercelFwd = request.headers.get("x-vercel-forwarded-for");
+    const first = vercelFwd
+      ?.split(",")
+      .map((s) => s.trim())
+      .find((s) => s.length > 0);
+    return first || "unknown";
+  }
+
+  if (mode === "cloudflare") {
+    const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+    return cfIp && cfIp.length > 0 ? cfIp : "unknown";
+  }
+
+  // "none": take the last proxy-appended entry, never the spoofable leading entry
   const fwd = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-  const rawIp = fwd?.split(",")[0]?.trim() || realIp?.trim() || "local";
-  return crypto.createHash("sha256").update(rawIp).digest("hex").slice(0, 16);
+  if (fwd) {
+    const entries = fwd
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (entries.length > 0) {
+      return entries[entries.length - 1];
+    }
+  }
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp && realIp.length > 0) {
+    return realIp;
+  }
+
+  return "unknown";
+}
+
+export function getClientIpHash(request: Request): string {
+  const ip = resolveTrustedClientIp(request);
+  const salt = getIpSalt();
+  return crypto.createHmac("sha256", salt).update(ip).digest("hex").slice(0, 32);
 }
 
 async function kvCommand(args: Array<string | number>): Promise<unknown> {

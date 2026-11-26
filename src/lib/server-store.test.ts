@@ -10,6 +10,7 @@ import {
   checkRateLimit,
   claimOrVerifyTree,
   deleteMessage,
+  getClientIpHash,
   getTreeRecord,
   markAllMessagesRead,
   markMessageRead,
@@ -614,5 +615,110 @@ describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", 
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+});
+
+describe("Task 1.3 trusted proxy IP resolution and salted HMAC hashing", () => {
+  const savedProxy = process.env.HOHO_TRUSTED_PROXY;
+  const savedSalt = process.env.HOHO_IP_SALT;
+  const savedNodeEnv = process.env.NODE_ENV;
+
+  afterAll(() => {
+    if (savedProxy === undefined) delete process.env.HOHO_TRUSTED_PROXY;
+    else process.env.HOHO_TRUSTED_PROXY = savedProxy;
+    if (savedSalt === undefined) delete process.env.HOHO_IP_SALT;
+    else process.env.HOHO_IP_SALT = savedSalt;
+    if (savedNodeEnv === undefined) {
+      delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV =
+        savedNodeEnv;
+    }
+  });
+
+  beforeEach(() => {
+    delete process.env.HOHO_TRUSTED_PROXY;
+    delete process.env.HOHO_IP_SALT;
+    (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+  });
+
+  it("ignores spoofed leading x-forwarded-for entries under vercel, cloudflare, and none", () => {
+    process.env.HOHO_IP_SALT = "test-salt-1";
+
+    process.env.HOHO_TRUSTED_PROXY = "vercel";
+    const v1 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: {
+          "x-forwarded-for": "1.1.1.1",
+          "x-vercel-forwarded-for": "203.0.113.10",
+        },
+      }),
+    );
+    const v2 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: {
+          "x-forwarded-for": "9.9.9.9",
+          "x-vercel-forwarded-for": "203.0.113.10",
+        },
+      }),
+    );
+    expect(v1).toBe(v2);
+    expect(v1).toMatch(/^[a-f0-9]{32}$/);
+
+    process.env.HOHO_TRUSTED_PROXY = "cloudflare";
+    const c1 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: {
+          "x-forwarded-for": "1.1.1.1",
+          "cf-connecting-ip": "198.51.100.7",
+        },
+      }),
+    );
+    const c2 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: {
+          "x-forwarded-for": "8.8.8.8",
+          "cf-connecting-ip": "198.51.100.7",
+        },
+      }),
+    );
+    expect(c1).toBe(c2);
+
+    process.env.HOHO_TRUSTED_PROXY = "none";
+    const n1 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: { "x-forwarded-for": "1.2.3.4, 203.0.113.25" },
+      }),
+    );
+    const n2 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: { "x-forwarded-for": "5.6.7.8, 203.0.113.25" },
+      }),
+    );
+    expect(n1).toBe(n2);
+
+    const unknown1 = getClientIpHash(new Request("http://localhost/"));
+    process.env.HOHO_TRUSTED_PROXY = "vercel";
+    const unknown2 = getClientIpHash(
+      new Request("http://localhost/", {
+        headers: { "x-forwarded-for": "1.2.3.4" },
+      }),
+    );
+    expect(unknown1).toBe(unknown2);
+  });
+
+  it("produces distinct hashes when HOHO_IP_SALT changes and throws if missing in production", () => {
+    const req = new Request("http://localhost/", {
+      headers: { "x-forwarded-for": "203.0.113.99" },
+    });
+    process.env.HOHO_IP_SALT = "salt-alpha";
+    const hashA = getClientIpHash(req);
+    process.env.HOHO_IP_SALT = "salt-beta";
+    const hashB = getClientIpHash(req);
+    expect(hashA).not.toBe(hashB);
+
+    delete process.env.HOHO_IP_SALT;
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    expect(() => getClientIpHash(req)).toThrow(/HOHO_IP_SALT/);
   });
 });
