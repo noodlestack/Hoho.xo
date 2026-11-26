@@ -10,6 +10,8 @@ import { saveStoredMessages, type TreeMessage } from "@/lib/messages";
 import { playOrnamentChime } from "@/lib/sound";
 import { parseHandle } from "@/lib/tree-config";
 
+const BACKOFF_STEPS_MS = [12_000, 20_000, 35_000, 60_000] as const;
+
 export interface UseOwnerMailOptions {
   isOwnerMode: boolean;
   serverSynced: boolean;
@@ -35,6 +37,7 @@ export function useOwnerMail({
 }: UseOwnerMailOptions) {
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const mailSeededRef = useRef<boolean>(false);
+  const backoffIdxRef = useRef<number>(0);
   const lastMailSummaryRef = useRef<{
     unreadCount: number;
     latestSeq: number;
@@ -54,12 +57,13 @@ export function useOwnerMail({
 
   const resetMailTracking = useCallback(() => {
     mailSeededRef.current = false;
+    backoffIdxRef.current = 0;
     lastMailSummaryRef.current = null;
   }, []);
 
   const refreshOwnerMail = useCallback(
     async (targetHandle: string) => {
-      if (!isOwnerMode || !parseHandle(targetHandle)) return;
+      if (!isOwnerMode || !parseHandle(targetHandle)) return false;
       try {
         const res = await fetch(
           `/api/trees/${encodeURIComponent(targetHandle)}/mail`,
@@ -68,7 +72,7 @@ export function useOwnerMail({
             credentials: "same-origin",
           },
         );
-        if (!res.ok) return;
+        if (!res.ok) return false;
         const data = (await res.json()) as {
           ok?: boolean;
           messages?: TreeMessage[];
@@ -88,6 +92,7 @@ export function useOwnerMail({
           saveStoredMessages(data.messages, targetHandle);
 
           if (newlyArrived.length > 0) {
+            backoffIdxRef.current = 0;
             const latest = newlyArrived[newlyArrived.length - 1];
             setLatestDroppedId(latest.id);
             if (dropTimerRef.current) {
@@ -105,10 +110,12 @@ export function useOwnerMail({
                 : `${newlyArrived.length} new anonymous ornaments arrived!`,
             );
           }
+          return true;
         }
       } catch {
         // Offline/transient error ignored cleanly
       }
+      return false;
     },
     [
       activeHandleRef,
@@ -123,8 +130,10 @@ export function useOwnerMail({
   );
 
   const pollOwnerMailSummary = useCallback(
-    async (targetHandle: string) => {
-      if (!isOwnerMode || !parseHandle(targetHandle)) return;
+    async (
+      targetHandle: string,
+    ): Promise<"changed" | "unchanged" | "error"> => {
+      if (!isOwnerMode || !parseHandle(targetHandle)) return "unchanged";
       try {
         const res = await fetch(
           `/api/trees/${encodeURIComponent(targetHandle)}/mail?summary=1`,
@@ -133,7 +142,7 @@ export function useOwnerMail({
             credentials: "same-origin",
           },
         );
-        if (!res.ok) return;
+        if (!res.ok) return "error";
         const data = (await res.json()) as {
           ok?: boolean;
           unreadCount?: number;
@@ -151,37 +160,96 @@ export function useOwnerMail({
             prev.latestSeq !== data.latestSeq
           ) {
             await refreshOwnerMail(targetHandle);
+            return "changed";
           }
+          return "unchanged";
         }
       } catch {
         // Offline/transient error ignored cleanly
       }
+      return "error";
     },
     [isOwnerMode, refreshOwnerMail],
   );
 
   useEffect(() => {
-    const onFocus = () => {
-      if (isOwnerMode && serverSyncedRef.current) {
-        void refreshOwnerMail(activeHandleRef.current);
+    if (!isOwnerMode || !serverSynced) return;
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const clearScheduled = () => {
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+        timerId = null;
       }
     };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [activeHandleRef, isOwnerMode, refreshOwnerMail, serverSyncedRef]);
 
-  useEffect(() => {
-    if (!isOwnerMode || !serverSynced) return;
-    const intervalId = window.setInterval(() => {
+    const scheduleNext = () => {
+      if (
+        cancelled ||
+        (typeof document !== "undefined" &&
+          document.visibilityState === "hidden")
+      ) {
+        return;
+      }
+      clearScheduled();
+      const delay = BACKOFF_STEPS_MS[backoffIdxRef.current] ?? 60_000;
+      timerId = window.setTimeout(async () => {
+        if (cancelled) return;
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState !== "visible"
+        ) {
+          return;
+        }
+        const outcome = await pollOwnerMailSummary(activeHandleRef.current);
+        if (cancelled) return;
+        if (outcome === "changed") {
+          backoffIdxRef.current = 0;
+        } else {
+          backoffIdxRef.current = Math.min(
+            BACKOFF_STEPS_MS.length - 1,
+            backoffIdxRef.current + 1,
+          );
+        }
+        scheduleNext();
+      }, delay);
+    };
+
+    const handleResume = () => {
       if (
         typeof document !== "undefined" &&
-        document.visibilityState === "visible"
+        document.visibilityState === "hidden"
       ) {
-        void pollOwnerMailSummary(activeHandleRef.current);
+        clearScheduled();
+        return;
       }
-    }, 12_000);
-    return () => window.clearInterval(intervalId);
-  }, [activeHandleRef, isOwnerMode, serverSynced, pollOwnerMailSummary]);
+      backoffIdxRef.current = 0;
+      clearScheduled();
+      if (serverSyncedRef.current) {
+        void pollOwnerMailSummary(activeHandleRef.current).finally(() => {
+          if (!cancelled) scheduleNext();
+        });
+      }
+    };
+
+    window.addEventListener("focus", handleResume);
+    document.addEventListener("visibilitychange", handleResume);
+    scheduleNext();
+
+    return () => {
+      cancelled = true;
+      clearScheduled();
+      window.removeEventListener("focus", handleResume);
+      document.removeEventListener("visibilitychange", handleResume);
+    };
+  }, [
+    activeHandleRef,
+    isOwnerMode,
+    pollOwnerMailSummary,
+    serverSynced,
+    serverSyncedRef,
+  ]);
 
   return {
     seedKnownMessages,

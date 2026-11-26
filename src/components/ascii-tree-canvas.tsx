@@ -1804,7 +1804,9 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       ) : (
         <canvas
           ref={canvasRef}
-          className={`tree-canvas${hoveredInfo ? "is-hovering-ornament" : ""}`}
+          className={["tree-canvas", hoveredInfo ? "is-hovering-ornament" : ""]
+            .filter(Boolean)
+            .join(" ")}
           style={{ touchAction: "none" }}
           aria-label={
             viewMode === "qr"

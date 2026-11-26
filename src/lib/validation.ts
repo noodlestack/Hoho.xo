@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { isTreeThemeId } from "./tree-themes";
-import {
-  isTreeSceneryId,
-  isTreeShapeId,
-  isTreeTopperId,
-} from "./tree-config";
+import { isTreeSceneryId, isTreeShapeId, isTreeTopperId } from "./tree-config";
 
 export const reportReasonSchema = z.enum([
   "harassment",
@@ -15,35 +11,31 @@ export const reportReasonSchema = z.enum([
   "other",
 ]);
 
-export const updateConfigSchema = z
-  .object({
-    handle: z.string().trim().min(1).max(48).optional(),
-    displayName: z.string().max(40).optional(),
-    avatar: z.string().max(32).optional(),
-    prompt: z.string().max(160).optional(),
-    mutedWords: z.string().max(300).optional(),
-    themeId: z
-      .string()
-      .refine(isTreeThemeId, "Unsupported tree theme.")
-      .optional(),
-    topper: z
-      .string()
-      .refine(isTreeTopperId, "Unsupported tree topper.")
-      .optional(),
-    shape: z
-      .string()
-      .refine(isTreeShapeId, "Unsupported tree shape.")
-      .optional(),
-    scenery: z
-      .string()
-      .refine(isTreeSceneryId, "Unsupported tree scenery.")
-      .optional(),
-    showSnow: z.boolean().optional(),
-    showGarland: z.boolean().optional(),
-    showOrnaments: z.boolean().optional(),
-    pauseInbox: z.boolean().optional(),
-    christmasLock: z.boolean().optional(),
-  });
+export const updateConfigSchema = z.object({
+  handle: z.string().trim().min(1).max(48).optional(),
+  displayName: z.string().max(40).optional(),
+  avatar: z.string().max(32).optional(),
+  prompt: z.string().max(160).optional(),
+  mutedWords: z.string().max(300).optional(),
+  themeId: z
+    .string()
+    .refine(isTreeThemeId, "Unsupported tree theme.")
+    .optional(),
+  topper: z
+    .string()
+    .refine(isTreeTopperId, "Unsupported tree topper.")
+    .optional(),
+  shape: z.string().refine(isTreeShapeId, "Unsupported tree shape.").optional(),
+  scenery: z
+    .string()
+    .refine(isTreeSceneryId, "Unsupported tree scenery.")
+    .optional(),
+  showSnow: z.boolean().optional(),
+  showGarland: z.boolean().optional(),
+  showOrnaments: z.boolean().optional(),
+  pauseInbox: z.boolean().optional(),
+  christmasLock: z.boolean().optional(),
+});
 
 export const claimTreeSchema = z.object({
   handle: z.string().trim().max(48).optional(),
@@ -63,6 +55,8 @@ export const createMessageSchema = z.object({
 
 export const patchMessageSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("read") }),
+  z.object({ action: z.literal("star"), starred: z.boolean() }),
+  z.object({ action: z.literal("reply") }),
   z.object({
     action: z.literal("report"),
     reason: reportReasonSchema.optional(),

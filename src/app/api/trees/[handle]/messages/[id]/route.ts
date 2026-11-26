@@ -4,7 +4,9 @@ import {
   deleteMessage,
   getOwnerTokenFromRequest,
   markMessageRead,
+  markMessageReplied,
   reportMessage,
+  setMessageStarred,
   verifyTreeOwner,
 } from "@/lib/server-store";
 import { parseHandle } from "@/lib/tree-config";
@@ -61,6 +63,34 @@ export async function PATCH(
   const payload = parsed.data;
   if (payload.action === "read") {
     const updated = await markMessageRead(cleanHandle, id);
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Message not found." },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(
+      { ok: true, message: updated },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (payload.action === "star") {
+    const updated = await setMessageStarred(cleanHandle, id, payload.starred);
+    if (!updated) {
+      return NextResponse.json(
+        { ok: false, error: "Message not found." },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(
+      { ok: true, message: updated },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (payload.action === "reply") {
+    const updated = await markMessageReplied(cleanHandle, id);
     if (!updated) {
       return NextResponse.json(
         { ok: false, error: "Message not found." },

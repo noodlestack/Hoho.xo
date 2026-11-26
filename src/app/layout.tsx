@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import {
+  Caveat,
   Instrument_Serif,
   JetBrains_Mono,
   Plus_Jakarta_Sans,
@@ -25,6 +26,13 @@ const display = Instrument_Serif({
 
 const mono = JetBrains_Mono({
   variable: "--font-mono",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "600"],
+  display: "swap",
+});
+
+const handwriting = Caveat({
+  variable: "--font-handwriting",
   subsets: ["latin", "latin-ext"],
   weight: ["400", "600"],
   display: "swap",
@@ -101,7 +109,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${display.variable} ${mono.variable}`}
+      className={`${sans.variable} ${display.variable} ${mono.variable} ${handwriting.variable}`}
     >
       <body>
         {children}

@@ -1,8 +1,4 @@
-import type {
-  MessageStatus,
-  ReportReason,
-  TreeMessage,
-} from "../messages";
+import type { MessageStatus, ReportReason, TreeMessage } from "../messages";
 import type { TreeConfig } from "../tree-config";
 
 export interface TreeMeta {
@@ -63,6 +59,8 @@ export type AppendMessageResult =
 
 export interface MessagePatch {
   readAt?: string | null;
+  repliedAt?: string | null;
+  starred?: boolean;
   status?: MessageStatus;
   reportReason?: ReportReason;
 }
@@ -70,7 +68,10 @@ export interface MessagePatch {
 export interface TreeStore {
   getTree(handle: string): Promise<TreeMeta | null>;
   createTreeIfAbsent(meta: TreeMeta): Promise<boolean>;
-  updateConfig(handle: string, nextConfig: TreeConfig): Promise<TreeMeta | null>;
+  updateConfig(
+    handle: string,
+    nextConfig: TreeConfig,
+  ): Promise<TreeMeta | null>;
   appendMessage(
     handle: string,
     input: AppendMessageInput,

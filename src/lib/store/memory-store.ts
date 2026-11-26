@@ -74,7 +74,8 @@ export function applyAppendToRecord(
 
   const maxSeq = record.messages.reduce((acc, m) => Math.max(acc, m.seq), 0);
   const normalizedType =
-    typeof input.ornamentType === "number" && Number.isFinite(input.ornamentType)
+    typeof input.ornamentType === "number" &&
+    Number.isFinite(input.ornamentType)
       ? Math.max(0, Math.min(15, Math.floor(input.ornamentType)))
       : null;
 
@@ -92,7 +93,9 @@ export function applyAppendToRecord(
   }
 
   const nextMessages = [...record.messages, created];
-  const totalVisible = nextMessages.filter((m) => m.status === "visible").length;
+  const totalVisible = nextMessages.filter(
+    (m) => m.status === "visible",
+  ).length;
   const nextRecord: StoredTreeRecord = {
     ...record,
     messages: nextMessages,
@@ -117,6 +120,8 @@ export function applyPatchToRecord(
     updatedMsg = {
       ...m,
       ...(patch.readAt !== undefined ? { readAt: patch.readAt } : {}),
+      ...(patch.repliedAt !== undefined ? { repliedAt: patch.repliedAt } : {}),
+      ...(patch.starred !== undefined ? { starred: patch.starred } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.reportReason !== undefined
         ? { reportReason: patch.reportReason }
@@ -159,7 +164,9 @@ export function applyMarkAllReadToRecord(
   };
 }
 
-export function computeRecordSummary(record: StoredTreeRecord | undefined): MailSummary {
+export function computeRecordSummary(
+  record: StoredTreeRecord | undefined,
+): MailSummary {
   if (!record) return { unread: 0, latestSeq: 0, total: 0 };
   let unread = 0;
   let latestSeq = 0;

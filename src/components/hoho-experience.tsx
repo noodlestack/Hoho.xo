@@ -889,6 +889,60 @@ export function HohoExperience({
     [activeHandle, persistMessagesLocal, showToast],
   );
 
+  const handleToggleStarMessage = useCallback(
+    (id: string, starred: boolean) => {
+      persistMessagesLocal((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, starred } : m)),
+      );
+      if (serverSyncedRef.current) {
+        void fetch(
+          `/api/trees/${encodeURIComponent(activeHandle)}/messages/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action: "star", starred }),
+          },
+        ).catch(() => {});
+      }
+      showToast(starred ? "Starred note" : "Removed star", "info");
+    },
+    [activeHandle, persistMessagesLocal, showToast],
+  );
+
+  const handleMarkMessageReplied = useCallback(
+    (id: string) => {
+      const nowIso = new Date().toISOString();
+      persistMessagesLocal((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                repliedAt: m.repliedAt ?? nowIso,
+                readAt: m.readAt ?? nowIso,
+              }
+            : m,
+        ),
+      );
+      if (serverSyncedRef.current) {
+        void fetch(
+          `/api/trees/${encodeURIComponent(activeHandle)}/messages/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action: "reply" }),
+          },
+        ).catch(() => {});
+      }
+    },
+    [activeHandle, persistMessagesLocal],
+  );
+
   const handleMarkAllRead = useCallback(async () => {
     const hasUnread = messages.some((m) => m.status === "visible" && !m.readAt);
     if (!hasUnread) return;
@@ -1362,7 +1416,9 @@ export function HohoExperience({
       {unreadCount > 0 ? (
         <span
           key={unreadTickSeq}
-          className={`unread-pill${unreadTickSeq > 0 ? "is-ticking" : ""}`}
+          className={["unread-pill", unreadTickSeq > 0 ? "is-ticking" : ""]
+            .filter(Boolean)
+            .join(" ")}
         >
           {unreadCount} new
         </span>
@@ -1372,13 +1428,15 @@ export function HohoExperience({
 
   return (
     <div
-      className={`hoho-app${
-        !isOwnerMode && isMobileViewport ? "is-visitor-mobile" : ""
-      }${
+      className={[
+        "hoho-app",
+        !isOwnerMode && isMobileViewport ? "is-visitor-mobile" : "",
         !isOwnerMode && isMobileViewport && visitorSnap === 0.28
           ? "is-visitor-peek"
-          : ""
-      }`}
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ "--accent": theme.swatch } as React.CSSProperties}
     >
       <div className="stage-shell">
@@ -2494,13 +2552,16 @@ export function HohoExperience({
                         <span>Idea</span>
                       </button>
                       <span
-                        className={`char-counter${
+                        className={[
+                          "char-counter",
                           noteBody.length >= 500
                             ? "is-limit"
                             : noteBody.length >= 450
                               ? "is-warn"
-                              : ""
-                        }`}
+                              : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                       >
                         {noteBody.length}/500
                       </span>
@@ -3049,13 +3110,16 @@ export function HohoExperience({
                           <span>Idea</span>
                         </button>
                         <span
-                          className={`char-counter${
+                          className={[
+                            "char-counter",
                             noteBody.length >= 500
                               ? "is-limit"
                               : noteBody.length >= 450
                                 ? "is-warn"
-                                : ""
-                          }`}
+                                : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                         >
                           {noteBody.length}/500
                         </span>
@@ -3205,13 +3269,17 @@ export function HohoExperience({
           />
           <MessageCardSheet
             message={activeMessage}
+            messages={messages}
             treeUrl={shareUrl}
             displayName={config.displayName}
             prompt={config.prompt}
             christmasLock={config.christmasLock}
             onClose={() => setActiveMessageId(null)}
+            onSelectMessage={handleOpenMessage}
             onDelete={handleDeleteMessage}
             onReport={handleReportMessage}
+            onToggleStar={handleToggleStarMessage}
+            onMarkReplied={handleMarkMessageReplied}
           />
           <InviteStorySheet
             open={inviteSheetOpen}

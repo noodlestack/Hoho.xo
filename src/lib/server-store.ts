@@ -395,7 +395,11 @@ function resolveTrustedClientIp(request: Request): string {
 export function getClientIpHash(request: Request): string {
   const ip = resolveTrustedClientIp(request);
   const salt = getIpSalt();
-  return crypto.createHmac("sha256", salt).update(ip).digest("hex").slice(0, 32);
+  return crypto
+    .createHmac("sha256", salt)
+    .update(ip)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export function sanitizeConfigPatch(
@@ -404,8 +408,7 @@ export function sanitizeConfigPatch(
 ): TreeConfig {
   if (!patch || typeof patch !== "object") return { ...base };
   const obj = patch as Record<string, unknown>;
-  const candidateTheme =
-    typeof obj.themeId === "string" ? obj.themeId : null;
+  const candidateTheme = typeof obj.themeId === "string" ? obj.themeId : null;
 
   return {
     handle: base.handle,
@@ -427,12 +430,9 @@ export function sanitizeConfigPatch(
     topper: isTreeTopperId(obj.topper) ? obj.topper : base.topper,
     shape: isTreeShapeId(obj.shape) ? obj.shape : base.shape,
     scenery: isTreeSceneryId(obj.scenery) ? obj.scenery : base.scenery,
-    showSnow:
-      typeof obj.showSnow === "boolean" ? obj.showSnow : base.showSnow,
+    showSnow: typeof obj.showSnow === "boolean" ? obj.showSnow : base.showSnow,
     showGarland:
-      typeof obj.showGarland === "boolean"
-        ? obj.showGarland
-        : base.showGarland,
+      typeof obj.showGarland === "boolean" ? obj.showGarland : base.showGarland,
     showOrnaments:
       typeof obj.showOrnaments === "boolean"
         ? obj.showOrnaments
@@ -705,6 +705,31 @@ export async function markMessageRead(
   if (!existing) return null;
   if (existing.readAt) return existing;
   return store.patchMessage(handle, id, { readAt: new Date().toISOString() });
+}
+
+export async function setMessageStarred(
+  handle: string,
+  id: string,
+  starred: boolean,
+): Promise<TreeMessage | null> {
+  const store = getActiveTreeStore();
+  const existing = await store.getMessage(handle, id);
+  if (!existing) return null;
+  return store.patchMessage(handle, id, { starred });
+}
+
+export async function markMessageReplied(
+  handle: string,
+  id: string,
+): Promise<TreeMessage | null> {
+  const store = getActiveTreeStore();
+  const existing = await store.getMessage(handle, id);
+  if (!existing) return null;
+  const now = new Date().toISOString();
+  return store.patchMessage(handle, id, {
+    repliedAt: existing.repliedAt ?? now,
+    readAt: existing.readAt ?? now,
+  });
 }
 
 export async function reportMessage(

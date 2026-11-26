@@ -1876,6 +1876,9 @@ select:focus-visible {
     color-mix(in srgb, var(--accent) 10%, #10131b) 0%,
     #0b0d12 100%
   );
+  touch-action: pan-y;
+  transition: transform 180ms var(--ease-out);
+  will-change: transform;
 }
 
 .message-reading-body {
@@ -1886,6 +1889,61 @@ select:focus-visible {
   color: var(--text);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.message-reading-body.is-handwriting {
+  font-family: var(--font-handwriting), var(--font-display), cursive;
+  font-size: 1.62rem;
+  line-height: 1.42;
+  letter-spacing: 0.01em;
+}
+
+.note-deck-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.note-deck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  min-width: 38px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-deck-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.note-deck-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.note-deck-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.note-deck-counter {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }
 
 .message-meta-row {
@@ -1996,18 +2054,21 @@ select:focus-visible {
 
 .mail-filter-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .filter-tab {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 38px;
+  padding: 6px 11px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--bg);
   color: var(--text-dim);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 

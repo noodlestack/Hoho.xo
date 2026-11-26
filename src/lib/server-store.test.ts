@@ -28,9 +28,11 @@ import {
   isStorageConfiguredForRuntime,
   markAllMessagesRead,
   markMessageRead,
+  markMessageReplied,
   RATE_LIMIT_POLICY,
   reportMessage,
   resetMemoryStoreForTests,
+  setMessageStarred,
   toPublicTreeData,
   updateTreeConfig,
   verifyTreeOwner,
@@ -73,7 +75,6 @@ afterAll(async () => {
 });
 
 describe("server-store persistence, auth, moderation, and restrictions", () => {
-
   it("claims handles once, rejects unauthorized claims with 409, and verifies matching keys", async () => {
     const first = await claimOrVerifyTree("kai_2026", null, {
       themeId: "aurora",
@@ -103,7 +104,9 @@ describe("server-store persistence, auth, moderation, and restrictions", () => {
     expect(verified.record.config.scenery).toBe("hearth");
 
     expect(await verifyTreeOwner("kai_2026", "bad")).toBeNull();
-    expect(await verifyTreeOwner("kai_2026", first.ownerToken ?? null)).not.toBeNull();
+    expect(
+      await verifyTreeOwner("kai_2026", first.ownerToken ?? null),
+    ).not.toBeNull();
   });
 
   it("strips private note bodies, mutedWords, and reported notes in public projections", async () => {
@@ -184,7 +187,11 @@ describe("server-store persistence, auth, moderation, and restrictions", () => {
 
   it("marks all unread visible messages read with markAllMessagesRead", async () => {
     await claimOrVerifyTree("bulkread", null, {});
-    const first = await addAnonymousMessage("bulkread", "First holiday wish", 1);
+    const first = await addAnonymousMessage(
+      "bulkread",
+      "First holiday wish",
+      1,
+    );
     const second = await addAnonymousMessage("bulkread", "Second wish", 2);
     expect(first.ok && second.ok).toBe(true);
 
@@ -234,8 +241,10 @@ describe("zod request validation schemas", () => {
 
   it("validates createMessageSchema bounds and ornamentType", () => {
     expect(
-      createMessageSchema.safeParse({ body: "Happy holidays!", ornamentType: 3 })
-        .success,
+      createMessageSchema.safeParse({
+        body: "Happy holidays!",
+        ornamentType: 3,
+      }).success,
     ).toBe(true);
     expect(createMessageSchema.safeParse({ body: "   " }).success).toBe(false);
     expect(
@@ -249,13 +258,13 @@ describe("zod request validation schemas", () => {
       patchMessageSchema.safeParse({ action: "report", reason: "spam" })
         .success,
     ).toBe(true);
-    expect(
-      patchMessageSchema.safeParse({ action: "invalid" }).success,
-    ).toBe(false);
+    expect(patchMessageSchema.safeParse({ action: "invalid" }).success).toBe(
+      false,
+    );
 
-    expect(
-      patchMailSchema.safeParse({ action: "mark_all_read" }).success,
-    ).toBe(true);
+    expect(patchMailSchema.safeParse({ action: "mark_all_read" }).success).toBe(
+      true,
+    );
     expect(patchMailSchema.safeParse({ action: "delete_all" }).success).toBe(
       false,
     );
@@ -292,7 +301,17 @@ describe("SSR privacy sanitization and robots policy", () => {
     const claimRes = await claimOrVerifyTree("noodlestack", null, {});
     expect(claimRes.ok).toBe(true);
 
-    for (const bad of ["ab", "!!", "@", "@@abc", "api", "hoho", "hohoxo", "a".repeat(21), "k\u0430i"]) {
+    for (const bad of [
+      "ab",
+      "!!",
+      "@",
+      "@@abc",
+      "api",
+      "hoho",
+      "hohoxo",
+      "a".repeat(21),
+      "k\u0430i",
+    ]) {
       const badClaim = await claimOrVerifyTree(bad, null, {});
       expect(badClaim.ok).toBe(false);
       if (!badClaim.ok) {
@@ -423,7 +442,14 @@ describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", 
             "Content-Type": "application/json",
           },
           body: JSON.stringify([
-            ["DEL", `hoho:v2:tree:${handle}`, `hoho:v2:seq:${handle}`, `hoho:v2:idx:${handle}`, `hoho:v2:msg:${handle}`, `hoho:v2:unread:${handle}`],
+            [
+              "DEL",
+              `hoho:v2:tree:${handle}`,
+              `hoho:v2:seq:${handle}`,
+              `hoho:v2:idx:${handle}`,
+              `hoho:v2:msg:${handle}`,
+              `hoho:v2:unread:${handle}`,
+            ],
           ]),
         }).catch(() => {});
       }
@@ -615,9 +641,11 @@ describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", 
         const url = String(input);
         const body = JSON.parse(String(init?.body ?? "[]"));
         if (url.endsWith("/pipeline")) {
-          const results = (body as Array<Array<string | number>>).map((cmd) => ({
-            result: runCmd(cmd),
-          }));
+          const results = (body as Array<Array<string | number>>).map(
+            (cmd) => ({
+              result: runCmd(cmd),
+            }),
+          );
           return new Response(JSON.stringify(results), { status: 200 });
         }
         return new Response(
@@ -1087,7 +1115,8 @@ describe("Task 2.1 moderation phone vs date refinement, lexicon hook, and option
       expect(timedOut).toEqual({ reject: false });
     } finally {
       timeoutSpy.mockRestore();
-      if (prevProvider === undefined) delete process.env.HOHO_MODERATION_PROVIDER;
+      if (prevProvider === undefined)
+        delete process.env.HOHO_MODERATION_PROVIDER;
       else process.env.HOHO_MODERATION_PROVIDER = prevProvider;
       if (prevKey === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = prevKey;
@@ -1207,5 +1236,46 @@ describe("Task 2.3 production durable storage guard and site URL detection", () 
     expect(isSiteUrlConfigured()).toBe(false);
     process.env.NEXT_PUBLIC_SITE_URL = "https://trees.example.org";
     expect(isSiteUrlConfigured()).toBe(true);
+  });
+});
+
+describe("Prompt 5 starred and replied persistence & privacy", () => {
+  it("persists starred and repliedAt without exposing private fields publicly", async () => {
+    await claimOrVerifyTree("mailp5", null, {});
+    const added = await addAnonymousMessage("mailp5", "Warm holiday cheer", 1);
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+
+    const msgId = added.ornament.id;
+    const starred = await setMessageStarred("mailp5", msgId, true);
+    expect(starred?.starred).toBe(true);
+
+    const unstarred = await setMessageStarred("mailp5", msgId, false);
+    expect(unstarred?.starred).toBe(false);
+
+    const reStarred = await setMessageStarred("mailp5", msgId, true);
+    expect(reStarred?.starred).toBe(true);
+
+    const replied = await markMessageReplied("mailp5", msgId);
+    expect(typeof replied?.repliedAt).toBe("string");
+    expect(typeof replied?.readAt).toBe("string");
+
+    const record = await getTreeRecord("mailp5");
+    expect(record).not.toBeNull();
+    if (!record) return;
+    const pub = toPublicTreeData(record);
+    expect(pub.ornaments).toHaveLength(1);
+    const stub = pub.ornaments[0] as unknown as Record<string, unknown>;
+    expect(stub.body).toBeUndefined();
+    expect(stub.starred).toBeUndefined();
+    expect(stub.repliedAt).toBeUndefined();
+    expect(stub.readAt).toBeNull();
+
+    expect(
+      patchMessageSchema.safeParse({ action: "star", starred: true }).success,
+    ).toBe(true);
+    expect(patchMessageSchema.safeParse({ action: "reply" }).success).toBe(
+      true,
+    );
   });
 });

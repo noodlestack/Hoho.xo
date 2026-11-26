@@ -4,12 +4,7 @@ import { parseHandle } from "./tree-config";
 export type MessageStatus = "visible" | "reported";
 
 export type ReportReason =
-  | "harassment"
-  | "threat"
-  | "sexual"
-  | "spam"
-  | "self_harm"
-  | "other";
+  "harassment" | "threat" | "sexual" | "spam" | "self_harm" | "other";
 
 export interface TreeMessage {
   id: string;
@@ -20,6 +15,8 @@ export interface TreeMessage {
   seed: number;
   status: MessageStatus;
   readAt: string | null;
+  repliedAt?: string | null;
+  starred?: boolean;
   createdAt: string;
   reportReason?: ReportReason;
 }
@@ -79,9 +76,7 @@ function containsExtraBlockedTerm(normalizedBody: string): boolean {
   for (const rawTerm of EXTRA_BLOCKED_TERMS) {
     const term = normalizeForModeration(rawTerm);
     if (!term) continue;
-    const re = new RegExp(
-      `(?:^|[^a-z0-9])${escapeRegex(term)}(?:$|[^a-z0-9])`,
-    );
+    const re = new RegExp(`(?:^|[^a-z0-9])${escapeRegex(term)}(?:$|[^a-z0-9])`);
     if (re.test(normalizedBody)) {
       return true;
     }
@@ -259,10 +254,7 @@ export function loadStoredMessages(handle = ""): TreeMessage[] {
   }
 }
 
-export function saveStoredMessages(
-  messages: TreeMessage[],
-  handle = "",
-): void {
+export function saveStoredMessages(messages: TreeMessage[], handle = ""): void {
   if (typeof window === "undefined") return;
   const key = getStorageKey(handle);
   if (!key) return;

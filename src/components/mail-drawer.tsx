@@ -7,7 +7,7 @@ import { OrnamentSpriteIcon } from "@/components/ornament-sprite-icon";
 import { formatRelativeTime, type TreeMessage } from "@/lib/messages";
 import { ORNAMENT_COLORS, ORNAMENT_TYPES } from "@/lib/tree-themes";
 
-type MailFilter = "all" | "unread" | "reported";
+type MailFilter = "all" | "unread" | "replied" | "starred" | "reported";
 
 interface MailDrawerProps {
   open: boolean;
@@ -37,6 +37,22 @@ export function MailDrawer({
     () => messages.filter((m) => !m.readAt && m.status === "visible").length,
     [messages],
   );
+  const repliedCount = useMemo(
+    () =>
+      messages.filter((m) => Boolean(m.repliedAt) && m.status === "visible")
+        .length,
+    [messages],
+  );
+  const starredCount = useMemo(
+    () =>
+      messages.filter((m) => Boolean(m.starred) && m.status === "visible")
+        .length,
+    [messages],
+  );
+  const reportedCount = useMemo(
+    () => messages.filter((m) => m.status === "reported").length,
+    [messages],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -45,6 +61,10 @@ export function MailDrawer({
       .filter((msg) => {
         if (filter === "unread") {
           if (msg.readAt !== null || msg.status !== "visible") return false;
+        } else if (filter === "replied") {
+          if (!msg.repliedAt || msg.status !== "visible") return false;
+        } else if (filter === "starred") {
+          if (!msg.starred || msg.status !== "visible") return false;
         } else if (filter === "reported") {
           if (msg.status !== "reported") return false;
         }
@@ -165,10 +185,26 @@ export function MailDrawer({
               <button
                 type="button"
                 className="filter-tab"
+                aria-pressed={filter === "replied"}
+                onClick={() => setFilter("replied")}
+              >
+                Replied ({repliedCount})
+              </button>
+              <button
+                type="button"
+                className="filter-tab"
+                aria-pressed={filter === "starred"}
+                onClick={() => setFilter("starred")}
+              >
+                Starred ({starredCount})
+              </button>
+              <button
+                type="button"
+                className="filter-tab"
                 aria-pressed={filter === "reported"}
                 onClick={() => setFilter("reported")}
               >
-                Reported
+                Reported{reportedCount > 0 ? ` (${reportedCount})` : ""}
               </button>
             </div>
           </div>
@@ -221,7 +257,9 @@ export function MailDrawer({
                   <button
                     key={msg.id}
                     type="button"
-                    className={`mail-item${isUnread ? "is-unread" : ""}`}
+                    className={["mail-item", isUnread ? "is-unread" : ""]
+                      .filter(Boolean)
+                      .join(" ")}
                     onClick={() => onOpenMessage(msg)}
                   >
                     <div className="mail-item-top">
@@ -245,8 +283,25 @@ export function MailDrawer({
                             · UNREAD
                           </span>
                         )}
+                        {msg.starred && (
+                          <span
+                            style={{
+                              color: "#F5C451",
+                              fontWeight: 700,
+                            }}
+                          >
+                            · STARRED
+                          </span>
+                        )}
+                        {msg.repliedAt && (
+                          <span style={{ color: "#8FD3FF", fontWeight: 700 }}>
+                            · REPLIED
+                          </span>
+                        )}
                         {msg.status === "reported" && (
-                          <span style={{ color: "#E5484D" }}>· REPORTED</span>
+                          <span style={{ color: "#E5484D", fontWeight: 700 }}>
+                            · REPORTED
+                          </span>
                         )}
                         {onTree && (
                           <span style={{ color: "#5BD18B" }}>· ON TREE</span>

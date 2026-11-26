@@ -120,7 +120,11 @@ export class KvTreeStore implements TreeStore {
     }
 
     // Ignore legacy unclaimed records
-    if (!legacy || !legacy.ownerTokenHash || legacy.ownerTokenHash.length === 0) {
+    if (
+      !legacy ||
+      !legacy.ownerTokenHash ||
+      legacy.ownerTokenHash.length === 0
+    ) {
       return null;
     }
 
@@ -272,7 +276,8 @@ export class KvTreeStore implements TreeStore {
     }
 
     const normalizedType =
-      typeof input.ornamentType === "number" && Number.isFinite(input.ornamentType)
+      typeof input.ornamentType === "number" &&
+      Number.isFinite(input.ornamentType)
         ? Math.max(0, Math.min(15, Math.floor(input.ornamentType)))
         : null;
 
@@ -421,6 +426,8 @@ export class KvTreeStore implements TreeStore {
     const updated: TreeMessage = {
       ...existing,
       ...(patch.readAt !== undefined ? { readAt: patch.readAt } : {}),
+      ...(patch.repliedAt !== undefined ? { repliedAt: patch.repliedAt } : {}),
+      ...(patch.starred !== undefined ? { starred: patch.starred } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.reportReason !== undefined
         ? { reportReason: patch.reportReason }
