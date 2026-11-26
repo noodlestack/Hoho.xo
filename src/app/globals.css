@@ -16,8 +16,8 @@
   --line: var(--hairline);
   --line-strong: var(--hairline-strong);
   --text: #f1ede4;
-  --text-dim: rgba(241, 237, 228, 0.68);
-  --text-faint: rgba(241, 237, 228, 0.52);
+  --text-dim: rgba(241, 237, 228, 0.76);
+  --text-faint: rgba(241, 237, 228, 0.64);
   --pine: #2f6b4f;
   --pine-lit: #5bd18b;
   --gold: #f5c451;
