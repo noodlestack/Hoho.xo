@@ -6,7 +6,7 @@ import {
   reportMessage,
   verifyTreeOwner,
 } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 import { formatZodError, patchMessageSchema } from "@/lib/validation";
 
 export async function PATCH(
@@ -14,7 +14,13 @@ export async function PATCH(
   context: { params: Promise<{ handle: string; id: string }> },
 ) {
   const { handle, id } = await context.params;
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle);
+  if (!cleanHandle) {
+    return NextResponse.json(
+      { ok: false, error: "Tree not found." },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const token = getOwnerTokenFromRequest(request, cleanHandle);
   const owner = await verifyTreeOwner(cleanHandle, token);
 
@@ -76,7 +82,13 @@ export async function DELETE(
   context: { params: Promise<{ handle: string; id: string }> },
 ) {
   const { handle, id } = await context.params;
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle);
+  if (!cleanHandle) {
+    return NextResponse.json(
+      { ok: false, error: "Tree not found." },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const token = getOwnerTokenFromRequest(request, cleanHandle);
   const owner = await verifyTreeOwner(cleanHandle, token);
 

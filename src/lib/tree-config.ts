@@ -108,28 +108,64 @@ export const VISITOR_IDEA_PROMPTS: string[] = [
 const CONFIG_STORAGE_PREFIX = "hoho_xo_config_v2";
 const ACTIVE_HANDLE_KEY = "hoho_xo_owner_handle_v1";
 
-export function sanitizeHandle(handle = "noodlestack"): string {
-  const clean = handle
+export const RESERVED_HANDLES = new Set<string>([
+  "api",
+  "t",
+  "admin",
+  "www",
+  "app",
+  "static",
+  "health",
+  "robots",
+  "privacy",
+  "terms",
+  "support",
+  "help",
+  "login",
+  "settings",
+  "about",
+  "_next",
+  "hoho",
+  "hohoxo",
+]);
+
+export function parseHandle(raw: string): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  const withoutAt = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(withoutAt)) return null;
+  const candidate = withoutAt.toLowerCase();
+  if (RESERVED_HANDLES.has(candidate)) return null;
+  return candidate;
+}
+
+/**
+ * @deprecated Client-side typing preview only. Never use for authorization,
+ * routing, or storage keys; use `parseHandle` instead.
+ */
+export function sanitizeHandle(handle = ""): string {
+  return handle
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "")
     .slice(0, 20);
-  return clean.length >= 3 ? clean : "noodlestack";
 }
 
-export function loadActiveOwnerHandle(): string {
-  if (typeof window === "undefined") return "noodlestack";
+export function loadActiveOwnerHandle(): string | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(ACTIVE_HANDLE_KEY);
-    return raw ? sanitizeHandle(raw) : "noodlestack";
+    return raw ? parseHandle(raw) : null;
   } catch {
-    return "noodlestack";
+    return null;
   }
 }
 
 export function saveActiveOwnerHandle(handle: string): void {
   if (typeof window === "undefined") return;
+  const parsed = parseHandle(handle);
+  if (!parsed) return;
   try {
-    window.localStorage.setItem(ACTIVE_HANDLE_KEY, sanitizeHandle(handle));
+    window.localStorage.setItem(ACTIVE_HANDLE_KEY, parsed);
   } catch {
     // Ignore storage errors
   }
@@ -165,11 +201,11 @@ export function isTreeSceneryId(value: unknown): value is TreeSceneryId {
   );
 }
 
-export function defaultTreeConfig(handle = "noodlestack"): TreeConfig {
-  const cleanHandle = sanitizeHandle(handle);
+export function defaultTreeConfig(handle = ""): TreeConfig {
+  const cleanHandle = parseHandle(handle) ?? "";
   return {
     handle: cleanHandle,
-    displayName: cleanHandle === "noodlestack" ? "noodlestack" : `@${cleanHandle}`,
+    displayName: cleanHandle ? `@${cleanHandle}` : "",
     avatar: "",
     prompt: OWNER_PROMPT_PRESETS[0],
     mutedWords: "",
@@ -185,10 +221,10 @@ export function defaultTreeConfig(handle = "noodlestack"): TreeConfig {
   };
 }
 
-export function loadTreeConfig(handle = "noodlestack"): TreeConfig {
-  const clean = sanitizeHandle(handle);
+export function loadTreeConfig(handle = ""): TreeConfig {
+  const clean = parseHandle(handle) ?? "";
   const fallback = defaultTreeConfig(clean);
-  if (typeof window === "undefined") return fallback;
+  if (typeof window === "undefined" || !clean) return fallback;
 
   try {
     const raw = window.localStorage.getItem(
@@ -247,13 +283,11 @@ export function loadTreeConfig(handle = "noodlestack"): TreeConfig {
   }
 }
 
-export function saveTreeConfig(
-  handle = "noodlestack",
-  config: TreeConfig,
-): void {
+export function saveTreeConfig(handle: string, config: TreeConfig): void {
   if (typeof window === "undefined") return;
+  const clean = parseHandle(handle);
+  if (!clean) return;
   try {
-    const clean = sanitizeHandle(handle);
     window.localStorage.setItem(
       `${CONFIG_STORAGE_PREFIX}:${clean}`,
       JSON.stringify({ ...config, handle: clean }),
@@ -274,7 +308,10 @@ export function buildDesignShareUrl(
   config: TreeConfig,
   options?: { short?: boolean },
 ): string {
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle) ?? "";
+  if (!cleanHandle) {
+    return new URL("/", origin).toString();
+  }
   const url = new URL(`/t/${cleanHandle}`, origin);
   if (options?.short) {
     return url.toString();

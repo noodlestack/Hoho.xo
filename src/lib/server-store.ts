@@ -14,7 +14,7 @@ import {
   isTreeSceneryId,
   isTreeShapeId,
   isTreeTopperId,
-  sanitizeHandle,
+  parseHandle,
   type TreeConfig,
 } from "./tree-config";
 import { isTreeThemeId } from "./tree-themes";
@@ -142,7 +142,8 @@ export function verifyOwnerToken(token: string, expectedHash: string): boolean {
 }
 
 export function getOwnerCookieName(handle: string): string {
-  return `${OWNER_COOKIE_PREFIX}${sanitizeHandle(handle)}`;
+  const clean = parseHandle(handle) ?? "";
+  return `${OWNER_COOKIE_PREFIX}${clean}`;
 }
 
 export function buildOwnerCookie(handle: string, token: string): string {
@@ -277,7 +278,8 @@ async function readSnapshotFromFile(): Promise<StoreFileSnapshot> {
 async function readTreeFromStore(
   handle: string,
 ): Promise<StoredTreeRecord | null> {
-  const clean = sanitizeHandle(handle);
+  const clean = parseHandle(handle);
+  if (!clean) return null;
   const kv = getKvEnv();
   if (kv) {
     const raw = await kvCommand(["GET", `hoho:tree:${clean}`]);
@@ -305,8 +307,9 @@ async function readTreeFromStore(
 }
 
 async function writeTreeToStore(record: StoredTreeRecord): Promise<void> {
+  const clean = parseHandle(record.handle);
+  if (!clean) return;
   const state = getSharedState();
-  const clean = sanitizeHandle(record.handle);
   const nextRecord: StoredTreeRecord = { ...record, handle: clean };
   state.memoryTrees.set(clean, nextRecord);
 
@@ -396,7 +399,7 @@ export function toPublicTreeData(
   handleOrRecord: string | StoredTreeRecord,
 ): PublicTreeData {
   if (typeof handleOrRecord === "string") {
-    const clean = sanitizeHandle(handleOrRecord);
+    const clean = parseHandle(handleOrRecord) ?? "";
     return {
       handle: clean,
       claimed: false,
@@ -451,9 +454,16 @@ export async function claimOrVerifyTree(
       ownerToken?: string;
       record: StoredTreeRecord;
     }
-  | { ok: false; status: 409; error: string }
+  | { ok: false; status: 400 | 409; error: string }
 > {
-  const handle = sanitizeHandle(rawHandle);
+  const handle = parseHandle(rawHandle);
+  if (!handle) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Handles use 3–20 letters, numbers, or underscores.",
+    };
+  }
   const existing = await readTreeFromStore(handle);
   const now = new Date().toISOString();
 
@@ -540,9 +550,16 @@ export async function addAnonymousMessage(
       totalVisible: number;
       selfHarmNotice?: boolean;
     }
-  | { ok: false; status: 400 | 403; error: string }
+  | { ok: false; status: 400 | 403 | 404; error: string }
 > {
-  const handle = sanitizeHandle(rawHandle);
+  const handle = parseHandle(rawHandle);
+  if (!handle) {
+    return {
+      ok: false,
+      status: 404,
+      error: "Tree not found.",
+    };
+  }
   const now = new Date().toISOString();
   let existing = await readTreeFromStore(handle);
 

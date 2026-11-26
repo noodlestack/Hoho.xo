@@ -4,7 +4,7 @@ import {
   checkRateLimit,
   getClientIpHash,
 } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 import { createMessageSchema, formatZodError } from "@/lib/validation";
 
 export async function POST(
@@ -12,7 +12,13 @@ export async function POST(
   context: { params: Promise<{ handle: string }> },
 ) {
   const { handle } = await context.params;
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle);
+  if (!cleanHandle) {
+    return NextResponse.json(
+      { ok: false, error: "Tree not found." },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   let rawPayload: unknown;
   try {

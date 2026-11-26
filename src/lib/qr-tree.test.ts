@@ -18,6 +18,8 @@ import {
   isTreeTopperId,
   OWNER_PROMPT_PRESETS,
   parseDesignFromSearchParams,
+  parseHandle,
+  RESERVED_HANDLES,
   TREE_AVATARS,
   TREE_SCENERIES,
   TREE_SHAPES,
@@ -277,6 +279,33 @@ describe("Christmas music box and festive chime safety", () => {
     // Reset track index back to track 0 cleanly
     while (getCurrentChristmasTrack().id !== first.id) {
       nextChristmasTrack();
+    }
+  });
+});
+
+describe("parseHandle strict validation", () => {
+  it("accepts valid 3-20 char handles with optional single leading @ and mixed case", () => {
+    expect(parseHandle("abc")).toBe("abc");
+    expect(parseHandle("@Kai_2026")).toBe("kai_2026");
+    expect(parseHandle("  @santa_claus_2026  ")).toBe("santa_claus_2026");
+    expect(parseHandle("a".repeat(20))).toBe("a".repeat(20));
+    expect(defaultTreeConfig("kai_26").displayName).toBe("@kai_26");
+    expect(defaultTreeConfig("").displayName).toBe("");
+  });
+
+  it("rejects short, malformed, overlong, unicode lookalike, and reserved handles", () => {
+    expect(parseHandle("")).toBeNull();
+    expect(parseHandle("ab")).toBeNull();
+    expect(parseHandle("!!")).toBeNull();
+    expect(parseHandle("@")).toBeNull();
+    expect(parseHandle("@@abc")).toBeNull();
+    expect(parseHandle("a".repeat(21))).toBeNull();
+    expect(parseHandle("hello-world")).toBeNull();
+    expect(parseHandle("k\u0430i")).toBeNull();
+    expect(parseHandle("\u212Aai_tree")).toBeNull();
+    for (const reserved of RESERVED_HANDLES) {
+      expect(parseHandle(reserved)).toBeNull();
+      expect(parseHandle(`@${reserved.toUpperCase()}`)).toBeNull();
     }
   });
 });

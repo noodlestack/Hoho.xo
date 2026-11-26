@@ -7,7 +7,7 @@ import {
   getOwnerTokenFromRequest,
   verifyTreeOwner,
 } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 import { claimTreeSchema, formatZodError } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -30,7 +30,16 @@ export async function POST(request: Request) {
   }
 
   const payload = parsed.data;
-  const handle = sanitizeHandle(payload.handle ?? "noodlestack");
+  const handle = parseHandle(payload.handle ?? "");
+  if (!handle) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Handles use 3–20 letters, numbers, or underscores.",
+      },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const explicitKey =
     payload.ownerKey && payload.ownerKey.trim().length > 0
       ? payload.ownerKey.trim()

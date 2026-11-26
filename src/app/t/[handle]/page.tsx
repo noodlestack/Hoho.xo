@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { HohoExperience } from "@/components/hoho-experience";
 import { getTreeRecord, toPublicTreeData } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,17 @@ export async function generateMetadata({
   params: Promise<{ handle: string }>;
 }): Promise<Metadata> {
   const { handle } = await params;
-  const safeHandle = sanitizeHandle(handle);
+  const safeHandle = parseHandle(handle);
+  if (!safeHandle) {
+    return {
+      title: "Tree not found — Hoho.xo",
+      description: "This tree handle is invalid or unavailable.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
   const record = await getTreeRecord(safeHandle).catch(() => null);
   const displayName = record?.config.displayName || `@${safeHandle}`;
   const prompt =
@@ -34,7 +45,10 @@ export default async function PublicTreePage({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
-  const safeHandle = sanitizeHandle(handle);
+  const safeHandle = parseHandle(handle);
+  if (!safeHandle) {
+    notFound();
+  }
   const record = await getTreeRecord(safeHandle).catch(() => null);
   const initialPublicTree = toPublicTreeData(record ?? safeHandle);
 

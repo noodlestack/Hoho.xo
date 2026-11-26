@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getTreeRecord, toPublicTreeData } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 import { TREE_THEMES } from "@/lib/tree-themes";
 
 export const alt = "Hoho.xo — Anonymous Christmas Tree";
@@ -27,15 +27,21 @@ export default async function Image({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
-  const cleanHandle = sanitizeHandle(handle);
-  const record = await getTreeRecord(cleanHandle);
-  const publicTree = toPublicTreeData(record ?? cleanHandle);
-  const theme = TREE_THEMES[publicTree.config.themeId] ?? TREE_THEMES.classic;
-  const ornamentCount = publicTree.totalVisible;
+  const cleanHandle = parseHandle(handle);
+  const record = cleanHandle ? await getTreeRecord(cleanHandle) : null;
+  const publicTree = cleanHandle ? toPublicTreeData(record ?? cleanHandle) : null;
+  const theme =
+    (publicTree ? TREE_THEMES[publicTree.config.themeId] : undefined) ??
+    TREE_THEMES.classic;
+  const ornamentCount = publicTree ? publicTree.totalVisible : 0;
   const primaryColor = theme.foliage[3] ?? "#34D399";
   const secondaryColor = theme.foliage[2] ?? theme.swatch;
   const accentColor = theme.star ?? "#F4D160";
   const glowColor = `${theme.swatch}33`;
+  const heading = publicTree ? `@${publicTree.handle}` : "Hoho.xo";
+  const subheading =
+    publicTree?.config.prompt ||
+    "Send an anonymous holiday note to hang on a 3D ASCII Christmas tree.";
 
   return new ImageResponse(
     (
@@ -122,7 +128,7 @@ export default async function Image({
                 letterSpacing: "-0.02em",
               }}
             >
-              @{publicTree.handle}
+              {heading}
             </div>
             <div
               style={{
@@ -133,8 +139,7 @@ export default async function Image({
                 maxWidth: "600px",
               }}
             >
-              {publicTree.config.prompt ||
-                "Hang an anonymous ornament on my holiday tree"}
+              {subheading}
             </div>
           </div>
 

@@ -29,18 +29,19 @@ import {
 const tempDir = path.join(os.tmpdir(), `hoho-xo-test-${process.pid}`);
 const tempStoreFile = path.join(tempDir, "store.json");
 
-describe("server-store persistence, auth, moderation, and restrictions", () => {
-  beforeEach(async () => {
-    process.env.HOHO_STORE_FILE = tempStoreFile;
-    resetMemoryStoreForTests();
-    await fs.rm(tempDir, { recursive: true, force: true });
-  });
+beforeEach(async () => {
+  process.env.HOHO_STORE_FILE = tempStoreFile;
+  resetMemoryStoreForTests();
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
 
-  afterAll(async () => {
-    delete process.env.HOHO_STORE_FILE;
-    resetMemoryStoreForTests();
-    await fs.rm(tempDir, { recursive: true, force: true });
-  });
+afterAll(async () => {
+  delete process.env.HOHO_STORE_FILE;
+  resetMemoryStoreForTests();
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+describe("server-store persistence, auth, moderation, and restrictions", () => {
 
   it("claims handles once, rejects unauthorized claims with 409, and verifies matching keys", async () => {
     const first = await claimOrVerifyTree("kai_2026", null, {
@@ -254,5 +255,29 @@ describe("SSR privacy sanitization and robots policy", () => {
     expect(rules.userAgent).toBe("*");
     expect(rules.allow).toBe("/");
     expect(rules.disallow).toEqual(["/api/", "/t/"]);
+  });
+
+  it("rejects invalid and reserved handles without creating or touching records", async () => {
+    const claimRes = await claimOrVerifyTree("noodlestack", null, {});
+    expect(claimRes.ok).toBe(true);
+
+    for (const bad of ["ab", "!!", "@", "@@abc", "api", "hoho", "hohoxo", "a".repeat(21), "k\u0430i"]) {
+      const badClaim = await claimOrVerifyTree(bad, null, {});
+      expect(badClaim.ok).toBe(false);
+      if (!badClaim.ok) {
+        expect(badClaim.status).toBe(400);
+      }
+
+      const badMsg = await addAnonymousMessage(bad, "Hello!", 0);
+      expect(badMsg.ok).toBe(false);
+      if (!badMsg.ok) {
+        expect(badMsg.status).toBe(404);
+      }
+
+      expect(await getTreeRecord(bad)).toBeNull();
+    }
+
+    const realRecord = await getTreeRecord("noodlestack");
+    expect(realRecord?.messages).toHaveLength(0);
   });
 });

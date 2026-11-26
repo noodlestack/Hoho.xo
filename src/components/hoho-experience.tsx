@@ -52,7 +52,7 @@ import {
   loadTreeConfig,
   OWNER_PROMPT_PRESETS,
   parseDesignFromSearchParams,
-  sanitizeHandle,
+  parseHandle,
   saveActiveOwnerHandle,
   saveTreeConfig,
   TREE_AVATARS,
@@ -93,12 +93,10 @@ const DRAFT_STORAGE_PREFIX = "hoho_draft";
 
 function readVisitorDraft(handle: string): string {
   if (typeof window === "undefined") return "";
+  const parsed = parseHandle(handle);
+  if (!parsed) return "";
   try {
-    return (
-      window.sessionStorage.getItem(
-        `${DRAFT_STORAGE_PREFIX}_${sanitizeHandle(handle)}`,
-      ) ?? ""
-    );
+    return window.sessionStorage.getItem(`${DRAFT_STORAGE_PREFIX}_${parsed}`) ?? "";
   } catch {
     return "";
   }
@@ -106,8 +104,10 @@ function readVisitorDraft(handle: string): string {
 
 function writeVisitorDraft(handle: string, draft: string): void {
   if (typeof window === "undefined") return;
+  const parsed = parseHandle(handle);
+  if (!parsed) return;
   try {
-    const key = `${DRAFT_STORAGE_PREFIX}_${sanitizeHandle(handle)}`;
+    const key = `${DRAFT_STORAGE_PREFIX}_${parsed}`;
     if (draft.length > 0) {
       window.sessionStorage.setItem(key, draft);
     } else {
@@ -122,11 +122,11 @@ const OWNER_KEY_STORAGE_PREFIX = "hoho_xo_owner_key_v1";
 
 function readStoredOwnerKey(handle: string): string {
   if (typeof window === "undefined") return "";
+  const parsed = parseHandle(handle);
+  if (!parsed) return "";
   try {
     return (
-      window.localStorage.getItem(
-        `${OWNER_KEY_STORAGE_PREFIX}:${sanitizeHandle(handle)}`,
-      ) ?? ""
+      window.localStorage.getItem(`${OWNER_KEY_STORAGE_PREFIX}:${parsed}`) ?? ""
     );
   } catch {
     return "";
@@ -135,11 +135,10 @@ function readStoredOwnerKey(handle: string): string {
 
 function writeStoredOwnerKey(handle: string, token: string): void {
   if (typeof window === "undefined" || !token) return;
+  const parsed = parseHandle(handle);
+  if (!parsed) return;
   try {
-    window.localStorage.setItem(
-      `${OWNER_KEY_STORAGE_PREFIX}:${sanitizeHandle(handle)}`,
-      token,
-    );
+    window.localStorage.setItem(`${OWNER_KEY_STORAGE_PREFIX}:${parsed}`, token);
   } catch {
     // Ignore storage quota errors cleanly
   }
@@ -187,7 +186,7 @@ export function HohoExperience({
   initialPublicTree,
 }: HohoExperienceProps) {
   const isOwnerMode = mode === "owner";
-  const initialSafeHandle = sanitizeHandle(initialHandle ?? "noodlestack");
+  const initialSafeHandle = initialHandle ? (parseHandle(initialHandle) ?? "") : "";
   const initialVisitorTree =
     !isOwnerMode && initialPublicTree ? initialPublicTree : null;
 
@@ -295,7 +294,7 @@ export function HohoExperience({
 
   const refreshOwnerMail = useCallback(
     async (targetHandle: string, explicitKey?: string) => {
-      if (!isOwnerMode) return;
+      if (!isOwnerMode || !parseHandle(targetHandle)) return;
       try {
         const res = await fetch(
           `/api/trees/${encodeURIComponent(targetHandle)}/mail`,
@@ -356,7 +355,7 @@ export function HohoExperience({
       explicitKey?: string,
       seedConfig?: TreeConfig,
     ): Promise<boolean> => {
-      if (!isOwnerMode) return false;
+      if (!isOwnerMode || !parseHandle(targetHandle)) return false;
       const storedKey = explicitKey || readStoredOwnerKey(targetHandle);
       const dedupeKey = `${targetHandle}:${storedKey || "anon"}`;
 
@@ -463,14 +462,22 @@ export function HohoExperience({
       );
 
       const resolvedHandle = isOwnerMode
-        ? loadActiveOwnerHandle()
-        : sanitizeHandle(initialHandle ?? "noodlestack");
+        ? (loadActiveOwnerHandle() ?? "")
+        : (parseHandle(initialHandle ?? "") ?? "");
 
       setActiveHandle(resolvedHandle);
       setHandleDraft(resolvedHandle);
 
-      const storedConfig = loadTreeConfig(resolvedHandle);
       if (isOwnerMode) {
+        if (!resolvedHandle) {
+          setStudioTab("prompt");
+          setConfig(defaultTreeConfig(""));
+          setMessages([]);
+          setServerSynced(false);
+          hydratedRef.current = true;
+          return;
+        }
+        const storedConfig = loadTreeConfig(resolvedHandle);
         const savedKey = readStoredOwnerKey(resolvedHandle);
         if (savedKey) setOwnerKey(savedKey);
         setConfig(storedConfig);
@@ -479,7 +486,8 @@ export function HohoExperience({
         setMessages(initialStored);
         hydratedRef.current = true;
         await claimOrSyncOwner(resolvedHandle, savedKey, storedConfig);
-      } else {
+      } else if (resolvedHandle) {
+        const storedConfig = loadTreeConfig(resolvedHandle);
         const savedDraft = readVisitorDraft(resolvedHandle);
         if (savedDraft) {
           setNoteBody((prev) => prev || savedDraft);
@@ -669,7 +677,7 @@ export function HohoExperience({
     (patch: Partial<TreeConfig>) => {
       setConfig((prev) => {
         const next: TreeConfig = { ...prev, ...patch, handle: activeHandle };
-        if (isOwnerMode && hydratedRef.current) {
+        if (isOwnerMode && hydratedRef.current && parseHandle(activeHandle)) {
           saveTreeConfig(activeHandle, next);
           scheduleServerConfigSync(activeHandle, next);
         }
@@ -682,25 +690,32 @@ export function HohoExperience({
   const commitHandleChange = useCallback(
     async (rawValue: string) => {
       if (!isOwnerMode) return;
-      const sanitized = sanitizeHandle(rawValue);
-      setHandleDraft(sanitized);
-      if (sanitized === activeHandle) return;
+      const nextHandle = parseHandle(rawValue);
+      if (!nextHandle) {
+        showToast(
+          "Handles use 3–20 letters, numbers, or underscores.",
+          "error",
+        );
+        return;
+      }
+      setHandleDraft(nextHandle);
+      if (nextHandle === activeHandle) return;
 
-      const localFallbackCfg: TreeConfig = { ...config, handle: sanitized };
+      const localFallbackCfg: TreeConfig = { ...config, handle: nextHandle };
       mailSeededRef.current = false;
-      saveActiveOwnerHandle(sanitized);
-      saveTreeConfig(sanitized, localFallbackCfg);
-      setActiveHandle(sanitized);
+      saveActiveOwnerHandle(nextHandle);
+      saveTreeConfig(nextHandle, localFallbackCfg);
+      setActiveHandle(nextHandle);
       setConfig(localFallbackCfg);
 
-      const savedKey = readStoredOwnerKey(sanitized);
+      const savedKey = readStoredOwnerKey(nextHandle);
       setOwnerKey(savedKey);
 
-      const ok = await claimOrSyncOwner(sanitized, savedKey, localFallbackCfg);
+      const ok = await claimOrSyncOwner(nextHandle, savedKey, localFallbackCfg);
       if (ok) {
-        showToast(`Active handle set to @${sanitized}`);
+        showToast(`Active handle set to @${nextHandle}`);
       } else {
-        showToast(`@${sanitized} requires its Owner Access Key`);
+        showToast(`@${nextHandle} requires its Owner Access Key`);
       }
     },
     [activeHandle, claimOrSyncOwner, config, isOwnerMode, showToast],
@@ -709,41 +724,55 @@ export function HohoExperience({
   const handleUnlockWithKey = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
+      const targetHandle = parseHandle(activeHandle) ?? parseHandle(handleDraft);
+      if (!targetHandle) {
+        showToast("Enter a valid handle first.", "error");
+        return;
+      }
       const cleanedKey = unlockDraft.trim();
       if (!cleanedKey) return;
-      const ok = await claimOrSyncOwner(activeHandle, cleanedKey);
+      const ok = await claimOrSyncOwner(targetHandle, cleanedKey);
       if (ok) {
         setUnlockDraft("");
-        showToast(`Unlocked @${activeHandle} Mail & settings`);
+        showToast(`Unlocked @${targetHandle} Mail & settings`);
       } else {
         showToast("Invalid Owner Access Key for this handle", "error");
       }
     },
-    [activeHandle, claimOrSyncOwner, showToast, unlockDraft],
+    [activeHandle, claimOrSyncOwner, handleDraft, showToast, unlockDraft],
   );
 
   const theme = TREE_THEMES[config.themeId] ?? TREE_THEMES.fairy;
   const effectiveOrigin = origin || "https://hoho.xo";
 
   const shareUrl = useMemo(() => {
-    if (isOwnerMode && serverSynced) {
-      return `${effectiveOrigin}/t/${activeHandle}`;
+    const clean = parseHandle(activeHandle);
+    if (!clean) {
+      return effectiveOrigin;
     }
-    return buildDesignShareUrl(effectiveOrigin, activeHandle, config, {
+    if (isOwnerMode && serverSynced) {
+      return `${effectiveOrigin}/t/${clean}`;
+    }
+    return buildDesignShareUrl(effectiveOrigin, clean, config, {
       short: false,
     });
   }, [effectiveOrigin, activeHandle, config, isOwnerMode, serverSynced]);
 
   const visitorRelativeHref = useMemo(() => {
+    const clean = parseHandle(activeHandle);
+    if (!clean) return "/";
     try {
       const parsed = new URL(shareUrl);
       return `${parsed.pathname}${parsed.search}`;
     } catch {
-      return `/t/${activeHandle}`;
+      return `/t/${clean}`;
     }
   }, [activeHandle, shareUrl]);
 
-  const qrMatrix = useMemo(() => createQrMatrix(shareUrl), [shareUrl]);
+  const qrMatrix = useMemo(
+    () => createQrMatrix(shareUrl || effectiveOrigin),
+    [effectiveOrigin, shareUrl],
+  );
 
   const resolvedOrnaments: ResolvedOrnament[] = useMemo(
     () => resolveTreeOrnaments(messages),
@@ -1210,9 +1239,11 @@ export function HohoExperience({
     ? (ORNAMENT_COLORS[visitorSentOrnament.colorIdx] ?? ORNAMENT_COLORS[0])
     : theme.swatch;
 
-  const pendingHandleSlug = sanitizeHandle(handleDraft);
+  const pendingHandleSlug = parseHandle(handleDraft);
   const hasPendingHandleChange =
     handleDraft.trim().length > 0 && pendingHandleSlug !== activeHandle;
+  const hasInvalidHandleDraft =
+    handleDraft.trim().length > 0 && pendingHandleSlug === null;
 
   const musicBtn = (
     <button
@@ -2000,14 +2031,17 @@ export function HohoExperience({
 
                 <div className="edit-field">
                   <label htmlFor="owner-handle-input" className="section-label">
-                    Tree handle (/t/{activeHandle})
+                    {activeHandle
+                      ? `Tree handle (/t/${activeHandle})`
+                      : "Choose your tree handle (/t/...)"}
                   </label>
                   <div className="url-row">
                     <input
                       id="owner-handle-input"
                       type="text"
                       className="social-input is-mono"
-                      maxLength={20}
+                      placeholder="e.g. santa_2026"
+                      maxLength={21}
                       value={handleDraft}
                       onChange={(event) => setHandleDraft(event.target.value)}
                       onKeyDown={(event) => {
@@ -2025,7 +2059,11 @@ export function HohoExperience({
                       Set
                     </button>
                   </div>
-                  {hasPendingHandleChange ? (
+                  {hasInvalidHandleDraft ? (
+                    <p className="handle-pending-hint">
+                      Handles use 3–20 letters, numbers, or underscores.
+                    </p>
+                  ) : hasPendingHandleChange && pendingHandleSlug ? (
                     <p className="handle-pending-hint">
                       Click Set to switch to @{pendingHandleSlug}
                     </p>

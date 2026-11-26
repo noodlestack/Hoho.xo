@@ -1,3 +1,5 @@
+import { parseHandle } from "./tree-config";
+
 export type MessageStatus = "visible" | "reported";
 
 export type ReportReason =
@@ -29,13 +31,9 @@ export interface ModerationResult {
 
 const STORAGE_KEY_PREFIX = "hoho_xo_messages_v2";
 
-function getStorageKey(handle = "noodlestack"): string {
-  const safe =
-    handle
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, "")
-      .slice(0, 20) || "noodlestack";
-  return `${STORAGE_KEY_PREFIX}:${safe}`;
+function getStorageKey(handle = ""): string | null {
+  const safe = parseHandle(handle);
+  return safe ? `${STORAGE_KEY_PREFIX}:${safe}` : null;
 }
 
 const BLOCK_PATTERNS: RegExp[] = [
@@ -172,10 +170,12 @@ export function createMessageRecord(params: {
   };
 }
 
-export function loadStoredMessages(handle = "noodlestack"): TreeMessage[] {
+export function loadStoredMessages(handle = ""): TreeMessage[] {
   if (typeof window === "undefined") return [];
+  const key = getStorageKey(handle);
+  if (!key) return [];
   try {
-    const raw = window.localStorage.getItem(getStorageKey(handle));
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -200,14 +200,13 @@ export function loadStoredMessages(handle = "noodlestack"): TreeMessage[] {
 
 export function saveStoredMessages(
   messages: TreeMessage[],
-  handle = "noodlestack",
+  handle = "",
 ): void {
   if (typeof window === "undefined") return;
+  const key = getStorageKey(handle);
+  if (!key) return;
   try {
-    window.localStorage.setItem(
-      getStorageKey(handle),
-      JSON.stringify(messages),
-    );
+    window.localStorage.setItem(key, JSON.stringify(messages));
   } catch {
     // Ignore storage quota errors gracefully
   }

@@ -6,7 +6,7 @@ import {
   updateTreeConfig,
   verifyTreeOwner,
 } from "@/lib/server-store";
-import { sanitizeHandle } from "@/lib/tree-config";
+import { parseHandle } from "@/lib/tree-config";
 import { formatZodError, updateConfigSchema } from "@/lib/validation";
 
 export async function GET(
@@ -14,7 +14,13 @@ export async function GET(
   context: { params: Promise<{ handle: string }> },
 ) {
   const { handle } = await context.params;
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle);
+  if (!cleanHandle) {
+    return NextResponse.json(
+      { ok: false, error: "Tree not found." },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const record = await getTreeRecord(cleanHandle);
 
   return NextResponse.json(
@@ -31,7 +37,13 @@ export async function PATCH(
   context: { params: Promise<{ handle: string }> },
 ) {
   const { handle } = await context.params;
-  const cleanHandle = sanitizeHandle(handle);
+  const cleanHandle = parseHandle(handle);
+  if (!cleanHandle) {
+    return NextResponse.json(
+      { ok: false, error: "Tree not found." },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const token = getOwnerTokenFromRequest(request, cleanHandle);
   const verified = await verifyTreeOwner(cleanHandle, token);
 
