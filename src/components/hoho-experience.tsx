@@ -35,6 +35,7 @@ import {
   type ReportReason,
   type TreeMessage,
 } from "@/lib/messages";
+import { getDefaultCrisisResource } from "@/lib/crisis-resources";
 import { createQrMatrix, resolveTreeOrnaments, SLOT_COUNT } from "@/lib/qr-tree";
 import type { PublicTreeData } from "@/lib/server-store";
 import {
@@ -1123,6 +1124,7 @@ export function HohoExperience({
           ignored?: boolean;
           ornament?: TreeMessage;
           totalVisible?: number;
+          selfHarmNotice?: boolean;
           error?: string;
         };
 
@@ -1144,6 +1146,29 @@ export function HohoExperience({
         }
 
         composeSubmitKeyRef.current = null;
+        if (data.selfHarmNotice) {
+          const support = getDefaultCrisisResource();
+          toast.info("If things feel heavy right now, you are not alone.", {
+            duration: 12_000,
+            action: {
+              label: "Find support",
+              onClick: () => {
+                if (support.url) {
+                  window.open(support.url, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                if (support.tel) {
+                  window.location.href = `tel:${support.tel}`;
+                  return;
+                }
+                toast.info(support.label, {
+                  description: support.guidance,
+                  duration: 15_000,
+                });
+              },
+            },
+          });
+        }
 
         if (data.ornament) {
           const placed = { ...data.ornament, body: "" };

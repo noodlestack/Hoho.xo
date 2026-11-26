@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import robots from "../app/robots";
+import { CRISIS_RESOURCES, getDefaultCrisisResource } from "./crisis-resources";
 import { FileTreeStore, KvTreeStore, MemoryTreeStore } from "./store";
 import { defaultTreeConfig } from "./tree-config";
 import {
@@ -926,5 +927,31 @@ describe("Task 1.5 cookie-only auth and same-origin checks", () => {
         }),
       ).ok,
     ).toBe(true);
+  });
+});
+
+describe("Task 1.6 self-harm support notice and crisis resources", () => {
+  it("provides a default guidance entry without unverified region phone numbers", () => {
+    const def = getDefaultCrisisResource();
+    expect(def.label.length).toBeGreaterThan(0);
+    expect(def.guidance.toLowerCase()).toContain("emergency");
+    expect(Object.keys(CRISIS_RESOURCES.regions)).toHaveLength(0);
+  });
+
+  it("sets selfHarmNotice=true while still delivering the note to the owner", async () => {
+    await claimOrVerifyTree("supporttree", null, {});
+    const res = await addAnonymousMessage(
+      "supporttree",
+      "I want to end my life",
+      0,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.selfHarmNotice).toBe(true);
+      expect(res.totalVisible).toBe(1);
+    }
+    const rec = await getTreeRecord("supporttree");
+    expect(rec?.messages).toHaveLength(1);
+    expect(rec?.messages[0].body).toBe("I want to end my life");
   });
 });
