@@ -6,6 +6,7 @@ import {
   claimOrVerifyTree,
   getClientIpHash,
   getOwnerTokenFromRequest,
+  isStorageConfiguredForRuntime,
   RATE_LIMIT_POLICY,
   verifyTreeOwner,
 } from "@/lib/server-store";
@@ -18,6 +19,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, error: originCheck.error },
       { status: originCheck.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (!isStorageConfiguredForRuntime()) {
+    return NextResponse.json(
+      { ok: false, error: "Storage is not configured." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 

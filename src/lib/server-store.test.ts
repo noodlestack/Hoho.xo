@@ -21,7 +21,11 @@ import {
   getOwnerCookieName,
   getOwnerMailSummary,
   getOwnerTokenFromRequest,
+  getStorageMode,
   getTreeRecord,
+  isDurableStorage,
+  isSiteUrlConfigured,
+  isStorageConfiguredForRuntime,
   markAllMessagesRead,
   markMessageRead,
   RATE_LIMIT_POLICY,
@@ -1096,5 +1100,85 @@ describe("Task 2.2 O(1) mail summary", () => {
       latestSeq: 2,
       total: 2,
     });
+  });
+});
+
+describe("Task 2.3 production durable storage guard and site URL detection", () => {
+  const savedNodeEnv = process.env.NODE_ENV;
+  const savedVercel = process.env.VERCEL;
+  const savedRequireDurable = process.env.HOHO_REQUIRE_DURABLE;
+  const savedSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const savedKvUrl = process.env.KV_REST_API_URL;
+  const savedKvTok = process.env.KV_REST_API_TOKEN;
+  const savedUpUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const savedUpTok = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  afterAll(() => {
+    if (savedNodeEnv === undefined) {
+      delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV =
+        savedNodeEnv;
+    }
+    if (savedVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = savedVercel;
+    if (savedRequireDurable === undefined) {
+      delete process.env.HOHO_REQUIRE_DURABLE;
+    } else {
+      process.env.HOHO_REQUIRE_DURABLE = savedRequireDurable;
+    }
+    if (savedSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = savedSiteUrl;
+    if (savedKvUrl === undefined) delete process.env.KV_REST_API_URL;
+    else process.env.KV_REST_API_URL = savedKvUrl;
+    if (savedKvTok === undefined) delete process.env.KV_REST_API_TOKEN;
+    else process.env.KV_REST_API_TOKEN = savedKvTok;
+    if (savedUpUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = savedUpUrl;
+    if (savedUpTok === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = savedUpTok;
+  });
+
+  beforeEach(() => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+    delete process.env.VERCEL;
+    delete process.env.HOHO_REQUIRE_DURABLE;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  });
+
+  it("distinguishes self-hosted file mode vs Vercel without KV in production", () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    expect(getStorageMode()).toBe("file");
+    expect(isDurableStorage()).toBe(true);
+    expect(isStorageConfiguredForRuntime()).toBe(true);
+
+    process.env.VERCEL = "1";
+    expect(getStorageMode()).toBe("file");
+    expect(isDurableStorage()).toBe(false);
+    expect(isStorageConfiguredForRuntime()).toBe(false);
+
+    delete process.env.VERCEL;
+    process.env.HOHO_REQUIRE_DURABLE = "1";
+    expect(isStorageConfiguredForRuntime()).toBe(false);
+
+    process.env.UPSTASH_REDIS_REST_URL = "https://kv.example.com";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "tok";
+    expect(getStorageMode()).toBe("kv");
+    expect(isDurableStorage()).toBe(true);
+    expect(isStorageConfiguredForRuntime()).toBe(true);
+  });
+
+  it("validates siteUrlConfigured against placeholders", () => {
+    expect(isSiteUrlConfigured()).toBe(false);
+    process.env.NEXT_PUBLIC_SITE_URL = "https://hoho.xo";
+    expect(isSiteUrlConfigured()).toBe(false);
+    process.env.NEXT_PUBLIC_SITE_URL = "https://your-domain.example";
+    expect(isSiteUrlConfigured()).toBe(false);
+    process.env.NEXT_PUBLIC_SITE_URL = "https://trees.example.org";
+    expect(isSiteUrlConfigured()).toBe(true);
   });
 });

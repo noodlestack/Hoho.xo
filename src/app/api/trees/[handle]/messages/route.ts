@@ -5,6 +5,7 @@ import {
   getClientIpHash,
   getGlobalMsgLimit,
   getHandleHourlyLimit,
+  isStorageConfiguredForRuntime,
   RATE_LIMIT_POLICY,
   type RateLimitResult,
 } from "@/lib/server-store";
@@ -56,6 +57,13 @@ export async function POST(
     return NextResponse.json(
       { ok: false, error: "Tree not found." },
       { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (!isStorageConfiguredForRuntime()) {
+    return NextResponse.json(
+      { ok: false, error: "Storage is not configured." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 

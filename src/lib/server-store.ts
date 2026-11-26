@@ -142,6 +142,43 @@ export function getStorageMode(): "kv" | "file" | "memory" {
   return getSharedState().fsUnavailable ? "memory" : "file";
 }
 
+export function isDurableStorage(): boolean {
+  const mode = getStorageMode();
+  if (mode === "kv") return true;
+  if (mode === "file") return !Boolean(process.env.VERCEL);
+  return false;
+}
+
+export function isStorageConfiguredForRuntime(): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  const requiresKv =
+    Boolean(process.env.VERCEL) || process.env.HOHO_REQUIRE_DURABLE === "1";
+  if (requiresKv && !getKvEnv()) {
+    return false;
+  }
+  return true;
+}
+
+export function isSiteUrlConfigured(): boolean {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false;
+    }
+    if (
+      parsed.hostname === "your-domain.example" ||
+      parsed.origin === "https://hoho.xo"
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function resetMemoryStoreForTests(): void {
   const state = getSharedState();
   state.memoryTrees.clear();
