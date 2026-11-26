@@ -178,7 +178,8 @@ export function useOwnerSession({
   const handleUnlockWithKey = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
-      const targetHandle = parseHandle(activeHandle) ?? parseHandle(handleDraft);
+      const targetHandle =
+        parseHandle(activeHandle) ?? parseHandle(handleDraft);
       if (!targetHandle) {
         showToast("Enter a valid handle first.", "error");
         return;

@@ -1,0 +1,403 @@
+/* 10 Theme Swatches (5x2 grid) */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px 2px;
+}
+
+.theme-swatch-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-height: 46px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.63rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+
+.theme-swatch-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.theme-swatch-btn[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.theme-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--swatch-color, var(--accent));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--swatch-color) 26%, transparent),
+    0 0 12px color-mix(in srgb, var(--swatch-color) 48%, transparent);
+  transition:
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+}
+
+.theme-swatch-btn[aria-pressed="true"] .theme-dot {
+  transform: scale(1.16);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--swatch-color) 38%, transparent),
+    0 0 22px var(--swatch-color);
+}
+
+/* Toppers, Shapes, Scenery, Avatars */
+.topper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.topper-btn,
+.shape-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(11, 13, 18, 0.68);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+.topper-btn[aria-pressed="true"],
+.shape-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+}
+
+.topper-glyph {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.shape-grid,
+.scenery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.shape-btn {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  min-width: 0;
+}
+
+.scenery-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shape-btn span {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.music-box-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.avatar-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avatar-choice-btn {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(11, 13, 18, 0.72);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avatar-choice-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+/* Toggles */
+.toggle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.switch-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.switch-track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+  transition: background 180ms var(--ease-out);
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 180ms var(--ease-out);
+}
+
+.switch-label input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch-label input:checked + .switch-track::after {
+  transform: translateX(16px);
+}
+
+/* Visitor Inline NGL Compose Box */
+.compose-box {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.compose-textarea-wrap {
+  position: relative;
+}
+
+.compose-textarea {
+  width: 100%;
+  min-height: 108px;
+  padding: 13px 13px 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: rgba(11, 13, 18, 0.84);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.48;
+  resize: none;
+}
+
+.compose-textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.compose-corner-bar {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.compose-corner-bar > * {
+  pointer-events: auto;
+}
+
+.dice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 2px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.dice-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.char-counter {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.char-counter.is-warn {
+  color: #f5c451;
+  font-weight: 700;
+}
+
+.char-counter.is-limit {
+  color: #f87171;
+  font-weight: 700;
+}
+
+/* Horizontal Prompt Presets Strip */
+.prompt-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 2px 1px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.prompt-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  min-height: 44px;
+  max-width: 260px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(18, 22, 32, 0.86);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+
+.prompt-chip:hover {
+  border-color: var(--accent);
+}
+
+/* Horizontal 16-Ornament Pill Strip */
+.ornament-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 1px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ornament-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.ornament-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(11, 13, 18, 0.72);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+.ornament-pill.is-picker-tile {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 52px;
+  min-height: 52px;
+  padding: 6px 8px;
+  border-radius: 14px;
+}
+
+.ornament-pill[aria-pressed="true"] {
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+.ornament-check-badge {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--gold);
+}
+
+.ornament-pill-glyph {
+  font-family: var(--font-mono), monospace;
+  font-weight: 700;
+  color: var(--accent);
+}
