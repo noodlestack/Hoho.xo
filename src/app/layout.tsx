@@ -10,14 +10,14 @@ import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({
   variable: "--font-sans",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "600", "700"],
   display: "swap",
 });
 
 const display = Instrument_Serif({
   variable: "--font-display",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400"],
   style: ["normal", "italic"],
   display: "swap",
@@ -25,7 +25,7 @@ const display = Instrument_Serif({
 
 const mono = JetBrains_Mono({
   variable: "--font-mono",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "600"],
   display: "swap",
 });

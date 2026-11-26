@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTreeLayout } from "@/components/hoho/use-tree-layout";
 import { gsap } from "@/lib/gsap-init";
 import type { TreeMessage } from "@/lib/messages";
 import {
@@ -180,12 +181,13 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   onToggleQrView,
   onZoomChange,
 }: AsciiTreeCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const layout = useTreeLayout(containerRef);
   const glowSpriteRef = useRef<{
     themeId: string;
     canvas: HTMLCanvasElement;
   } | null>(null);
-  const [isCompactViewport, setIsCompactViewport] = useState(true);
   const internalZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const renderZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const onZoomChangeRef = useRef(onZoomChange);
@@ -307,23 +309,15 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     };
   }, [latestDroppedId, reducedMotion]);
 
-  useEffect(() => {
-    const syncViewport = () => {
-      setIsCompactViewport(window.innerWidth < 768);
-    };
-    syncViewport();
-    window.addEventListener("resize", syncViewport);
-    return () => window.removeEventListener("resize", syncViewport);
-  }, []);
-
-  // Deterministic cloud derived from active QR matrix + link + silhouette (mobile-adaptive density)
+  // Deterministic cloud derived from active QR matrix + link + silhouette (container-area adaptive density)
+  const isDenseCloud = layout.quality !== "low";
   const cloud = useMemo(() => {
     if (!matrix.ok) return [];
     return generateQrTreeCloud(matrix, qrValue, {
-      dense: !isCompactViewport,
+      dense: isDenseCloud,
       shape,
     });
-  }, [matrix, qrValue, shape, isCompactViewport]);
+  }, [matrix, qrValue, shape, isDenseCloud]);
 
   // Pre-generated background stars, parallax snowflakes, and hearth ember sparks
   const backdrop = useMemo(() => {
@@ -377,6 +371,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     reducedMotion,
     staticMode,
     isOwnerMode,
+    layout,
   });
 
   useEffect(() => {
@@ -400,6 +395,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       reducedMotion,
       staticMode,
       isOwnerMode,
+      layout,
     };
 
     const st = animStateRef.current;
@@ -447,6 +443,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     reducedMotion,
     staticMode,
     isOwnerMode,
+    layout,
     onZoomChange,
   ]);
 
@@ -479,6 +476,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         ornaments: curOrnaments,
         reducedMotion: curReducedRaw,
         staticMode: curStatic,
+        layout: curLayout,
       } = propsRef.current;
 
       const curReduced = curReducedRaw || Boolean(curStatic);
@@ -543,15 +541,21 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      // Font & grid cell sizing + stage optical centering
+      // Font & grid cell sizing from ResizeObserver + measured glyph metrics
       const isCompact = cssW < 640;
       const freeWidth = Math.max(200, cssW);
       const stageCenterX = cssW * 0.5;
-      const stageCenterY = isCompact ? cssH * 0.475 : cssH * 0.465;
+      const stageCenterY = isCompact ? cssH * 0.5 : cssH * 0.505;
 
-      const fontSize = isCompact ? 9.5 : 12.2;
-      const cellW = fontSize * 0.62;
-      const cellH = Math.round(fontSize * 1.1);
+      const {
+        fontSize,
+        cellW,
+        cellH,
+        treeScale,
+        topScale,
+        qrBoxSide,
+        fontFamily,
+      } = curLayout;
       const cols = Math.max(1, Math.ceil(cssW / cellW));
       const rows = Math.max(1, Math.ceil(cssH / cellH));
       const cellTotal = cols * rows;
@@ -674,7 +678,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         curScenery === "starlight"
           ? backdrop.stars.length
           : Math.min(130, backdrop.stars.length);
-      ctx.font = `500 ${isCompact ? 9.5 : 11.5}px "JetBrains Mono", monospace`;
+      ctx.font = `500 ${Math.max(8, Math.round(fontSize * 0.9))}px ${fontFamily}`;
       for (let i = 0; i < starLimit; i += 1) {
         const star = backdrop.stars[i];
         const twinkle = curReduced
@@ -692,7 +696,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       // 1c. Falling snow / wind-driven blizzard streaks / hearth rising embers
       if (curSnow && sceneryFade > 0.01) {
         if (curScenery === "hearth") {
-          ctx.font = `600 ${isCompact ? 9 : 11}px "JetBrains Mono", monospace`;
+          ctx.font = `600 ${Math.max(8, Math.round(fontSize * 0.88))}px ${fontFamily}`;
           for (let i = 0; i < backdrop.embers.length; i += 1) {
             const spark = backdrop.embers[i];
             const ey = curReduced
@@ -717,13 +721,9 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           for (const layer of ["far", "near"] as const) {
             ctx.font = `${layer === "near" ? 600 : 400} ${
               layer === "near"
-                ? isCompact
-                  ? 10
-                  : 12.5
-                : isCompact
-                  ? 8.5
-                  : 10.5
-            }px "JetBrains Mono", monospace`;
+                ? Math.max(8.5, Math.round(fontSize * 1.02))
+                : Math.max(7.5, Math.round(fontSize * 0.85))
+            }px ${fontFamily}`;
 
             for (let i = 0; i < backdrop.flakes.length; i += 1) {
               const flake = backdrop.flakes[i];
@@ -751,21 +751,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       }
       ctx.globalAlpha = 1;
 
-      // 2. Projection parameters
+      // 2. Projection parameters (fit-derived scales from useTreeLayout)
       const cosY = Math.cos(effectiveYaw);
       const sinY = Math.sin(effectiveYaw);
       const cosX = Math.cos(st.elev);
       const sinX = Math.sin(st.elev);
-
-      const availableH = Math.max(180, cssH * (isCompact ? 0.62 : 0.72));
-      const availableW = freeWidth * (isCompact ? 0.92 : 0.88);
-      const treeScale = Math.min(availableH / 9.8, availableW / 7.2);
-      const topScale = Math.min(availableH, availableW) / 7.4;
-      const qrBoxSide = Math.min(
-        Math.max(160, (cssH - (isCompact ? 34 : 52)) * 0.74),
-        freeWidth * 0.84,
-        340,
-      );
 
       const topMix =
         Math.max(0, (st.elev - 0.22) / (1.38 - 0.22)) * (1 - st.qrMix);
@@ -1056,15 +1046,19 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.restore();
         }
 
-        // Draw surviving ASCII cells
-        ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
+        // Draw surviving ASCII cells at integer pixel coordinates
+        ctx.font = `600 ${fontSize}px ${fontFamily}`;
         for (let idx = 0; idx < cellTotal; idx += 1) {
           if (zBuf[idx] === -Infinity) continue;
           const col = idx % cols;
           const row = Math.floor(idx / cols);
           ctx.globalAlpha = alphaBuf[idx];
           ctx.fillStyle = colorBuf[idx];
-          ctx.fillText(glyphBuf[idx], (col + 0.5) * cellW, (row + 0.5) * cellH);
+          ctx.fillText(
+            glyphBuf[idx],
+            Math.round((col + 0.5) * cellW),
+            Math.round((row + 0.5) * cellH),
+          );
         }
         ctx.globalAlpha = 1;
 
@@ -1113,7 +1107,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               : curTopper === "snowflake"
                 ? "#8FD3FF"
                 : curTheme.star;
-          ctx.font = `700 ${Math.max(8.5, fontSize - 1)}px "JetBrains Mono", monospace`;
+          ctx.font = `700 ${Math.max(8, Math.round(fontSize * 0.92))}px ${fontFamily}`;
           const step = Math.max(6.5, cellW * 1.15);
 
           if (curTopper === "diamond") {
@@ -1317,7 +1311,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.stroke();
 
           ctx.fillStyle = "#F2EDE4";
-          ctx.font = `700 ${Math.max(10, Math.round(qrBoxSide * 0.04))}px "JetBrains Mono", monospace`;
+          ctx.font = `700 ${Math.max(10, Math.round(qrBoxSide * 0.04))}px ${fontFamily}`;
           ctx.fillText(
             `hoho.xo · @${curHandle}`.slice(0, 28),
             stageCenterX,
@@ -1325,7 +1319,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           );
 
           ctx.fillStyle = "#9A968D";
-          ctx.font = `500 ${Math.max(8, Math.round(qrBoxSide * 0.03))}px "JetBrains Mono", monospace`;
+          ctx.font = `500 ${Math.max(8, Math.round(qrBoxSide * 0.03))}px ${fontFamily}`;
           ctx.fillText(
             "SCAN TO SEND AN ANONYMOUS NOTE",
             stageCenterX,
@@ -1518,7 +1512,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.fillStyle = color;
           ctx.font = `700 ${
             isDenseOrnaments ? (isCompact ? 11.5 : 13.5) : isCompact ? 15 : 18
-          }px "JetBrains Mono", monospace`;
+          }px ${fontFamily}`;
           ctx.fillText(style.glyph, 0, 0.5);
 
           if (isUnread) {
@@ -1719,7 +1713,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     : null;
 
   return (
-    <div className="tree-canvas-wrap">
+    <div ref={containerRef} className="tree-canvas-wrap">
       {canvasFailed ? (
         <div
           className="static-tree-fallback"

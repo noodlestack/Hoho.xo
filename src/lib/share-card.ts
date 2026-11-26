@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { loadCanvasFont } from "./canvas-font";
 import type { TreeMessage } from "./messages";
 import type { TreeConfig } from "./tree-config";
 import { ORNAMENT_COLORS, ORNAMENT_TYPES, type TreeTheme } from "./tree-themes";
@@ -9,6 +10,7 @@ export async function renderThemedQrDataUrl(
   sizePx = 1200,
   handle = "noodlestack",
 ): Promise<string> {
+  const monoFont = await loadCanvasFont(700, 44, "--font-mono", "monospace");
   const { modules } = QRCode.create(value, { errorCorrectionLevel: "M" });
   const n = modules.size;
   const quiet = 4;
@@ -29,12 +31,7 @@ export async function renderThemedQrDataUrl(
   const borderW = Math.max(4, Math.round(sizePx * 0.005));
   ctx.strokeStyle = "#232834";
   ctx.lineWidth = borderW;
-  ctx.strokeRect(
-    borderW / 2,
-    borderW / 2,
-    sizePx - borderW,
-    totalH - borderW,
-  );
+  ctx.strokeRect(borderW / 2, borderW / 2, sizePx - borderW, totalH - borderW);
 
   const cell = sizePx / total;
   const isFinderCell = (r: number, c: number) =>
@@ -63,12 +60,20 @@ export async function renderThemedQrDataUrl(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#F2EDE4";
-  ctx.font = `700 ${Math.round(sizePx * 0.036)}px "JetBrains Mono", monospace`;
-  ctx.fillText(`hoho.xo · @${handle}`.slice(0, 32), sizePx / 2, sizePx + footerPx * 0.36);
+  ctx.font = `700 ${Math.round(sizePx * 0.036)}px ${monoFont}`;
+  ctx.fillText(
+    `hoho.xo · @${handle}`.slice(0, 32),
+    sizePx / 2,
+    sizePx + footerPx * 0.36,
+  );
 
   ctx.fillStyle = "#9A968D";
-  ctx.font = `500 ${Math.round(sizePx * 0.022)}px "JetBrains Mono", monospace`;
-  ctx.fillText("SCAN TO HANG AN ANONYMOUS NOTE · made by noodlestack", sizePx / 2, sizePx + footerPx * 0.72);
+  ctx.font = `500 ${Math.round(sizePx * 0.022)}px ${monoFont}`;
+  ctx.fillText(
+    "SCAN TO HANG AN ANONYMOUS NOTE · made by noodlestack",
+    sizePx / 2,
+    sizePx + footerPx * 0.72,
+  );
 
   return canvas.toDataURL("image/png");
 }
@@ -249,9 +254,10 @@ export async function renderStoryCardDataUrl(
   treeUrl: string,
   options: StoryCardOptions = {},
 ): Promise<string> {
-  if (typeof document !== "undefined" && document.fonts) {
-    await document.fonts.ready;
-  }
+  const [monoFont, displayFont] = await Promise.all([
+    loadCanvasFont(600, 32, "--font-mono", "monospace"),
+    loadCanvasFont(400, 56, "--font-display", "Georgia, serif"),
+  ]);
 
   const width = 1080;
   const height = 1920;
@@ -290,7 +296,7 @@ export async function renderStoryCardDataUrl(
   ctx.save();
   ctx.globalAlpha = 0.2;
   ctx.fillStyle = vibe.ascii;
-  ctx.font = '600 40px "JetBrains Mono", monospace';
+  ctx.font = `600 40px ${monoFont}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ASCII_MOTIF.forEach((row, index) => {
@@ -305,12 +311,12 @@ export async function renderStoryCardDataUrl(
   const headerName = options.displayName?.trim() || "Hoho.xo";
 
   ctx.fillStyle = vibe.accent;
-  ctx.font = '700 30px "JetBrains Mono", monospace';
+  ctx.font = `700 30px ${monoFont}`;
   ctx.textAlign = "center";
   ctx.fillText(`★  ${headerName.toUpperCase()}  ★`, width / 2, 156);
 
   ctx.fillStyle = ornamentColor;
-  ctx.font = '600 24px "JetBrains Mono", monospace';
+  ctx.font = `600 24px ${monoFont}`;
   ctx.fillText(
     `ANONYMOUS NOTE · ${ornament.name.toUpperCase()} (${ornament.glyph})`,
     width / 2,
@@ -324,7 +330,11 @@ export async function renderStoryCardDataUrl(
   if (options.prompt?.trim()) {
     ctx.fillStyle = "#C9C4BA";
     ctx.font = '400 34px "Instrument Serif", Georgia, serif';
-    const promptLines = wrapParagraphs(ctx, options.prompt.trim(), width - 260).slice(0, 2);
+    const promptLines = wrapParagraphs(
+      ctx,
+      options.prompt.trim(),
+      width - 260,
+    ).slice(0, 2);
     promptLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, 268 + idx * 42);
     });
@@ -360,7 +370,7 @@ export async function renderStoryCardDataUrl(
   const lineHeight = Math.round(fontSize * 1.3);
 
   ctx.fillStyle = "#F3EFE7";
-  ctx.font = `400 ${fontSize}px "Instrument Serif", Georgia, serif`;
+  ctx.font = `400 ${fontSize}px ${displayFont}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
@@ -387,12 +397,15 @@ export async function renderStoryCardDataUrl(
     ctx.strokeRect(cardX, replyY, cardW, replyH);
 
     ctx.fillStyle = "#F5C451";
-    ctx.font = '600 22px "JetBrains Mono", monospace';
+    ctx.font = `600 22px ${monoFont}`;
     ctx.fillText("OWNER REPLY", width / 2, replyY + 42);
 
     ctx.fillStyle = "#F2EDE4";
-    ctx.font = '400 42px "Instrument Serif", Georgia, serif';
-    const replyLines = wrapParagraphs(ctx, clampedReply, cardW - 100).slice(0, 3);
+    ctx.font = `400 42px ${displayFont}`;
+    const replyLines = wrapParagraphs(ctx, clampedReply, cardW - 100).slice(
+      0,
+      3,
+    );
     replyLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, replyY + 98 + idx * 48);
     });
@@ -400,16 +413,16 @@ export async function renderStoryCardDataUrl(
 
   // Footer link and attribution
   ctx.fillStyle = "#9A968D";
-  ctx.font = '500 26px "JetBrains Mono", monospace';
+  ctx.font = `500 26px ${monoFont}`;
   ctx.fillText("SEND AN ANONYMOUS NOTE TO MY TREE", width / 2, 1690);
 
   ctx.fillStyle = "#F5C451";
-  ctx.font = '600 30px "JetBrains Mono", monospace';
+  ctx.font = `600 30px ${monoFont}`;
   const shortLink = treeUrl.replace(/^https?:\/\//, "").slice(0, 44);
   ctx.fillText(shortLink, width / 2, 1746);
 
   ctx.fillStyle = "#9A968D";
-  ctx.font = '400 22px "JetBrains Mono", monospace';
+  ctx.font = `400 22px ${monoFont}`;
   ctx.fillText("hoho.xo · made by noodlestack", width / 2, 1815);
 
   return canvas.toDataURL("image/png");
@@ -438,9 +451,10 @@ export async function renderInviteStoryCardDataUrl(
   config: Pick<TreeConfig, "handle" | "displayName" | "prompt">,
   template: InviteTemplateId = "qr-forward",
 ): Promise<string> {
-  if (typeof document !== "undefined" && document.fonts) {
-    await document.fonts.ready;
-  }
+  const [monoFont, displayFont] = await Promise.all([
+    loadCanvasFont(600, 32, "--font-mono", "monospace"),
+    loadCanvasFont(400, 68, "--font-display", "Georgia, serif"),
+  ]);
 
   const width = 1080;
   const height = 1920;
@@ -476,7 +490,7 @@ export async function renderInviteStoryCardDataUrl(
   ctx.save();
   ctx.globalAlpha = template === "minimal" ? 0.1 : 0.16;
   ctx.fillStyle = theme.qrDark;
-  ctx.font = '600 32px "JetBrains Mono", monospace';
+  ctx.font = `600 32px ${monoFont}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ASCII_MOTIF.slice(0, 6).forEach((row, index) => {
@@ -487,7 +501,7 @@ export async function renderInviteStoryCardDataUrl(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = theme.swatch;
-  ctx.font = '600 28px "JetBrains Mono", monospace';
+  ctx.font = `600 28px ${monoFont}`;
   ctx.fillText(
     `★  @${config.handle.toUpperCase()} · ${theme.label.toUpperCase()} TREE  ★`,
     width / 2,
@@ -495,8 +509,12 @@ export async function renderInviteStoryCardDataUrl(
   );
 
   ctx.fillStyle = "#F2EDE4";
-  ctx.font = '700 42px "JetBrains Mono", monospace';
-  ctx.fillText((config.displayName || `@${config.handle}`).slice(0, 32), width / 2, 224);
+  ctx.font = `700 42px ${monoFont}`;
+  ctx.fillText(
+    (config.displayName || `@${config.handle}`).slice(0, 32),
+    width / 2,
+    224,
+  );
 
   const drawEmbeddedQr = (qrBoxSize: number, qrY: number) => {
     const { modules } = QRCode.create(treeUrl, { errorCorrectionLevel: "M" });
@@ -538,8 +556,11 @@ export async function renderInviteStoryCardDataUrl(
     ctx.stroke();
 
     ctx.fillStyle = "#F2EDE4";
-    ctx.font = '400 68px "Instrument Serif", Georgia, serif';
-    const promptLines = wrapParagraphs(ctx, config.prompt, width - 290).slice(0, 4);
+    ctx.font = `400 68px ${displayFont}`;
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 290).slice(
+      0,
+      4,
+    );
     const pStartY = 485 - ((promptLines.length - 1) * 78) / 2;
     promptLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, pStartY + idx * 78);
@@ -556,8 +577,11 @@ export async function renderInviteStoryCardDataUrl(
     ctx.stroke();
 
     ctx.fillStyle = "#F2EDE4";
-    ctx.font = '400 50px "Instrument Serif", Georgia, serif';
-    const promptLines = wrapParagraphs(ctx, config.prompt, width - 340).slice(0, 3);
+    ctx.font = `400 50px ${displayFont}`;
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 340).slice(
+      0,
+      3,
+    );
     const pStartY = 405 - ((promptLines.length - 1) * 58) / 2;
     promptLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, pStartY + idx * 58);
@@ -574,8 +598,11 @@ export async function renderInviteStoryCardDataUrl(
     ctx.stroke();
 
     ctx.fillStyle = "#F2EDE4";
-    ctx.font = '400 50px "Instrument Serif", Georgia, serif';
-    const promptLines = wrapParagraphs(ctx, config.prompt, width - 300).slice(0, 3);
+    ctx.font = `400 50px ${displayFont}`;
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 300).slice(
+      0,
+      3,
+    );
     const pStartY = 379 - ((promptLines.length - 1) * 58) / 2;
     promptLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, pStartY + idx * 58);
@@ -586,16 +613,16 @@ export async function renderInviteStoryCardDataUrl(
 
   // Lower-middle area (y ~1080..1380) intentionally left calm and clear for IG/TikTok link stickers
   ctx.fillStyle = "#F5C451";
-  ctx.font = '600 28px "JetBrains Mono", monospace';
+  ctx.font = `600 28px ${monoFont}`;
   ctx.fillText("SCAN QR OR TAP MY LINK STICKER", width / 2, 1696);
 
   ctx.fillStyle = "#F2EDE4";
-  ctx.font = '500 26px "JetBrains Mono", monospace';
+  ctx.font = `500 26px ${monoFont}`;
   const shortLink = treeUrl.replace(/^https?:\/\//, "").slice(0, 48);
   ctx.fillText(shortLink, width / 2, 1752);
 
   ctx.fillStyle = "#9A968D";
-  ctx.font = '400 22px "JetBrains Mono", monospace';
+  ctx.font = `400 22px ${monoFont}`;
   ctx.fillText("hoho.xo · made by noodlestack", width / 2, 1816);
 
   return canvas.toDataURL("image/png");
