@@ -26,7 +26,7 @@
 ## Features
 
 - **Strict Owner vs. Visitor Isolation (`/` vs. `/t/[handle]`)**
-  - **Owner Studio (`/`)**: Protected by an automatic cryptographic `HttpOnly` session cookie + backup **Owner Access Key** for cross-device recovery, featuring a 3-tab Creator Studio (**Share**, **Style**, **Prompt**), one-tap `"Unwrap newest unread"` spotlight, live Mail polling, and `.txt` keepsake archive exports.
+  - **Owner Studio (`/`)**: Protected by an `HttpOnly` session cookie (`__Host-` prefixed in production) with same-origin checks—the **Owner Access Key** is shown **once** at claim time for cross-device recovery and is never stored in `localStorage`. Features a 3-tab Creator Studio (**Share**, **Style**, **Prompt**), one-tap `"Unwrap newest unread"` spotlight, lightweight Mail summary polling, and `.txt` keepsake archive exports.
   - **Visitor Bio Link (`/t/[handle]`)**: SSR-hydrated anonymous compose experience showing only sanitized ornament positions—never message bodies, read status, hidden word lists, or owner controls—with `sessionStorage` draft auto-save, `Ctrl/Cmd+Enter` quick send, character progress bar, and celebratory confetti.
 - **3D ASCII Tree & Tap-to-QR Morphing**
   - Hardware-friendly 2D canvas projection (~6,600 adaptive points on desktop, tuned density on mobile) with a cached radial glow sprite, `IntersectionObserver` off-screen frame pausing, and 2-finger pinch-to-zoom.
@@ -41,9 +41,10 @@
 - **Private Mail Archive & `1080×1920` Story Cards**
   - Accessible Vaul slide-over Mail drawer & swipe-to-dismiss note sheets with Search, `All`/`Unread`/`Reported` filters, `Mark all read`, `Wrap Dec 25` lock mode, and `1080×1920` IG Story PNG exports across 4 vibes (`Night`, `Pine`, `Ember`, `Blush`).
   - Dynamic `1200×630` OpenGraph social cards generated via `next/og` for both `/` and `/t/[handle]`.
-- **Security, Moderation & Rate Limits**
-  - Strict `zod` schema validation on every `/api/trees/**` endpoint.
-  - Sliding-window IP rate limits (`6/min` and `30/hr` per visitor IP + handle; `20/hr` production claim limit), honeypot trap, `Pause inbox` toggle, one-click report/delete, and `classifyMessage` filtering (URLs, emails, phones, and owner-muted words).
+- **Security, Moderation & Fail-Closed Rate Limits**
+  - Strict `zod` schema validation, `Idempotency-Key` replay deduplication, per-tree message capacity cap (`1000` default), and `Origin`/`Referer` + `Content-Type` enforcement on owner-authenticated mutations.
+  - Upstash Redis sliding-window rate limits (`@upstash/ratelimit`) with salted HMAC-SHA256 client IP hashing (`HOHO_IP_SALT`, trusted proxy header extraction via `HOHO_TRUSTED_PROXY`): `20/10m` global per-IP cap, `200/hr` per-handle cap, `6/min` and `30/hr` per-IP + handle, and `20/hr` production claim limit. **Fails closed (`503`)** when Upstash KV errors/times out in production.
+  - Honeypot trap, `Pause inbox` toggle, one-click report/delete, local `classifyMessage` filtering (URLs, emails, phone numbers without blocking holiday dates, owner-muted words, maintainer lexicon `EXTRA_BLOCKED_TERMS`, optional opt-in OpenAI moderation), and non-blocking crisis support guidance.
   - Security headers (`Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`).
 
 ---
@@ -53,7 +54,7 @@
 ```mermaid
 flowchart LR
   V["Visitor /t/[handle]"] -->|SSR Hydration| Page["Next.js App Router"]
-  O["Owner Studio /"] -->|HttpOnly Cookie + Key| API["/api/trees/** + Zod"]
+  O["Owner Studio /"] -->|HttpOnly Cookie| API["/api/trees/** + Zod"]
   V -->|POST /messages| API
   API --> Store["Server Store (Upstash KV / Atomic JSON)"]
   Page --> OG["next/og Dynamic PNG (1200x630)"]
@@ -85,7 +86,7 @@ flowchart LR
 | Styling & UI Primitives | Tailwind CSS v4, `lucide-react`, `vaul`, `sonner`, `canvas-confetti` |
 | Validation & QR | `zod` v4, `qrcode` |
 | Canvas, Audio & Exports | HTML5 2D Canvas (`IntersectionObserver` + glow cache), Web Audio API, `next/og` |
-| Storage | Upstash Redis / Vercel KV REST (`kv`), Atomic JSON file persistence (`file`), Memory fallback |
+| Storage & Limits | `@upstash/redis` & `@upstash/ratelimit` (`hoho:v2:*`), Atomic JSON file (`file`), Memory fallback |
 | Testing & Tooling | Vitest 5, ESLint 9, TypeScript compiler (`tsc --noEmit`), `pnpm` |
 
 ---
@@ -100,7 +101,7 @@ pnpm dev
 ```
 
 - **Owner Hub**: `http://localhost:3000`
-- **Public Visitor Page**: `http://localhost:3000/t/noodlestack`
+- **Public Visitor Page**: `http://localhost:3000/t/<your-handle>` *(after claiming a handle in Owner Studio)*
 - **Health Check**: `http://localhost:3000/api/health`
 
 ## Verification
@@ -116,11 +117,13 @@ pnpm build
 
 ## Deployment
 
-### Vercel (+ Upstash Redis / Vercel KV)
+### Vercel (+ Upstash Redis / Vercel KV — Required)
+
+> **Important:** **Vercel requires Upstash Redis / Vercel KV** (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL` / `KV_REST_API_TOKEN`). Without KV on Vercel in production, tree claims and note submissions return `503` (`Storage is not configured.`) and `/api/health` returns `503` (`durable: false`) rather than silently falling back to ephemeral instance memory.
 
 1. Push this repository to GitHub and import into Vercel (`pnpm build`, Node 24+).
-2. Set `NEXT_PUBLIC_SITE_URL` and connect an **Upstash Redis** / **Vercel KV** database (`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, or `KV_REST_API_URL` / `KV_REST_API_TOKEN`—see [.env.example](.env.example)).
-3. Deploy—`/api/health` will report `"storage": "kv"`, CSP/HSTS headers are active in [next.config.ts](next.config.ts), and `HttpOnly` owner cookies enable cross-request privacy with cross-device recovery via Owner Access Key.
+2. Set `NEXT_PUBLIC_SITE_URL`, `HOHO_IP_SALT`, `HOHO_TRUSTED_PROXY=vercel`, and connect an **Upstash Redis** / **Vercel KV** database (see [.env.example](.env.example)).
+3. Deploy—`/api/health` will report `"storage": "kv"` and `"durable": true`, CSP/HSTS headers are active in [next.config.ts](next.config.ts), and `HttpOnly` `__Host-` owner cookies authenticate Owner Studio and Mail.
 
 ### Docker Standalone
 

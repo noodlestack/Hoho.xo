@@ -1,3 +1,7 @@
+---
+> **Superseded.** The app now has a backend, message storage, and Mail. See README and PRODUCT.md.
+---
+
 # Hoho.xo technical review
 
 Reviewed 23 November 2026 against the supplied Master Build Specification v3.1,
