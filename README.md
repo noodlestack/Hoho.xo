@@ -1,5 +1,7 @@
 <div align="center">
 
+![Hoho.xo Banner](docs/assets/banner.png)
+
 # Hoho.xo
 
 **Your bio link as a luminous 3D ASCII Christmas tree & scannable QR card.**
@@ -10,42 +12,39 @@
 [![React](https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Vitest](https://img.shields.io/badge/Vitest-Tested-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-61_Passing-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F5C451?style=flat-square)](LICENSE)
 
 </div>
 
 ---
 
-![Hoho.xo Preview](docs/preview.png)
+<!-- HERO_MEDIA_START -->
+> Live demo recording and updated studio/mobile screenshots follow below.
+<!-- HERO_MEDIA_END -->
 
-**Hoho.xo** turns your personal bio link into an interactive 3D ASCII Christmas tree and a razor-clean, scannable dark-canvas QR code. Share your link or QR on Instagram Stories, X, or WhatsApp—friends scan or open `/t/[handle]` with zero sign-in to hang anonymous holiday notes as glowing ornaments on your tree.
+**Hoho.xo** turns your bio link into a volumetric, ASCII-rendered 3D Christmas tree that morphs into a scannable dark-canvas QR code. Visitors open `/t/[handle]` with zero sign-in to hang anonymous notes as jewel ornaments—then Owners unwrap them inside a private `HttpOnly`-cookie Mail drawer and export `1080×1920` Instagram/TikTok Story cards.
 
 ---
 
-## Features
+## Highlights & Features
 
-- **Strict Owner vs. Visitor Isolation (`/` vs. `/t/[handle]`)**
-  - **Owner Studio (`/`)**: Protected by an `HttpOnly` session cookie (`__Host-` prefixed in production) with same-origin checks—the **Owner Access Key** is shown **once** at claim time for cross-device recovery and is never stored in `localStorage`. Features a 3-tab Creator Studio (**Share**, **Style**, **Prompt**), one-tap `"Unwrap newest unread"` spotlight, lightweight Mail summary polling, and `.txt` keepsake archive exports.
-  - **Visitor Bio Link (`/t/[handle]`)**: SSR-hydrated anonymous compose experience showing only sanitized ornament positions—never message bodies, read status, hidden word lists, or owner controls—with `sessionStorage` draft auto-save, `Ctrl/Cmd+Enter` quick send, character progress bar, and celebratory confetti.
-- **3D ASCII Tree & Tap-to-QR Morphing**
-  - Hardware-friendly 2D canvas projection (~6,600 adaptive points on desktop, tuned density on mobile) with a cached radial glow sprite, `IntersectionObserver` off-screen frame pausing, and 2-finger pinch-to-zoom.
-  - Tapping empty sky, the footer pill, or pressing `Q` smoothly fades atmospheric effects and morphs the tree into a scannable QR code wrapped in a strict 4-module quiet zone linking directly to `/t/[handle]`.
-- **Deep Customization & Holiday Atmosphere**
-  - **10 Color Themes** (`Classic`, `Fairy`, `Pine`, `Snow`, `Midnight`, `Blush`, `Aurora`, `Silver`, `Ember`, `Mint`).
-  - **6 Tree Toppers** (`Star`, `Sparkle`, `Snowflake`, `Heart`, `Crown`, `Bow`) & **4 Silhouettes** (`Classic`, `Slim`, `Bonsai`, `Full`).
-  - **5 Animated Winter Sceneries** (`Snowfall`, `Aurora`, `Starlight`, `Blizzard`, `Hearth`).
-  - **16 Ornament Styles** (the newest **100** visible notes decorate the 3D tree, while **Mail** retains the complete archive).
-- **Web Audio Christmas Music Box**
-  - Built-in synthesized celesta music box featuring 4 holiday carols (`Play`/`Pause`/`Next Carol`) plus soft interactive chimes—strictly opt-in via user gesture.
-- **Private Mail Archive & `1080×1920` Story Cards**
-  - Accessible Vaul slide-over Mail drawer & swipe-to-dismiss note sheets with Search, `All`/`Unread`/`Reported` filters, `Mark all read`, `Wrap Dec 25` lock mode, and `1080×1920` IG Story PNG exports across 4 vibes (`Night`, `Pine`, `Ember`, `Blush`).
-  - Dynamic `1200×630` OpenGraph social cards generated via `next/og` for both `/` and `/t/[handle]`.
+- **Volumetric 3D ASCII Tree & Radial-Wave QR Morph (`AsciiTreeCanvas`)**
+  - ~6,600 adaptive 3D points with orbiting Lambert lighting, single-hue depth shading, sparse twinkling lights (`<= 7%`), continuous helical garland, gentle height-dependent wind sway, and a skippable 1.4s GSAP bottom-to-top grow animation.
+  - Press `Q` or tap empty sky to morph the tree point cloud outward in a `<= 1.2s` radial wave into a strict 4-module quiet-zone scannable QR plate.
+- **Hanging Jewel Ornaments & Live Arrival Motion**
+  - Up to 100 latest visible notes render as high-contrast jewel ornaments with soft unread halos, dark backing disks, and top-left specular highlights.
+  - Newly delivered notes drop `-120px` onto their branch with a gold landing flash and a 2.2s damped pendulum swing, while Owner Mail polls `/mail?summary=1` every 12s with a live unread pill tick.
+- **Strict Owner vs. Visitor Privacy ([SECURITY.md](SECURITY.md))**
+  - **Owner Studio (`/`)**: Claim a 3–20 char handle with a one-time recovery key stored server-side via SHA-256 and authenticated via an `HttpOnly` session cookie (`__Host-` in production) + same-origin CSRF enforcement (`Origin`/`Referer`).
+  - **Visitor Bio Link (`/t/[handle]`)**: SSR-hydrated anonymous composer showing zero message text, zero read status, and zero sender metadata. Includes Taglish & English prompt presets, 16 ornament picks, `sessionStorage` drafts, a flying GSAP send-arc, tactile haptics, and a viral `"Get your own tree →"` celebration loop.
+- **3 IG/TikTok Story Invite Templates & Reply-on-Story Cards**
+  - Preview and share `1080×1920` Story invites (`QR Forward`, `Big Prompt`, `Minimal`) designed with a calm lower-middle link-sticker band, plus anonymous note cards with optional 140-char Owner replies via Web Share API (PNG download fallback).
+- **Mobile-First Vaul Bottom Sheet & PWA Ready**
+  - Viewports below `768px` keep the tree taking the upper canvas (`>= 58%`) behind a draggable Vaul bottom sheet (`Studio` / `Send note`) with crisp `192×192`, `512×512`, and `apple-touch-icon` PNG assets.
+  - Optional VAPID Web Push (`src/lib/push.ts` + `public/sw.js` via Next.js 16 `after()`) coalesces alerts to max 1/min across up to 5 devices and never transmits note text.
 - **Security, Moderation & Fail-Closed Rate Limits**
-  - Strict `zod` schema validation, `Idempotency-Key` replay deduplication, per-tree message capacity cap (`1000` default), and `Origin`/`Referer` + `Content-Type` enforcement on owner-authenticated mutations.
-  - Upstash Redis sliding-window rate limits (`@upstash/ratelimit`) with salted HMAC-SHA256 client IP hashing (`HOHO_IP_SALT`, trusted proxy header extraction via `HOHO_TRUSTED_PROXY`): `20/10m` global per-IP cap, `200/hr` per-handle cap, `6/min` and `30/hr` per-IP + handle, and `20/hr` production claim limit. **Fails closed (`503`)** when Upstash KV errors/times out in production.
-  - Honeypot trap, `Pause inbox` toggle, one-click report/delete, local `classifyMessage` filtering (URLs, emails, phone numbers without blocking holiday dates, owner-muted words, maintainer lexicon `EXTRA_BLOCKED_TERMS`, optional opt-in OpenAI moderation), and non-blocking crisis support guidance.
-  - Security headers (`Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`).
+  - `zod` v4 validation, `Idempotency-Key` deduplication, local `classifyMessage` filtering, owner muted words, honeypot trap, and fail-closed (`503`) Upstash Redis sliding-window rate limits with HMAC-SHA256 IP hashing (`HOHO_IP_SALT`).
 
 ---
 
@@ -53,13 +52,26 @@
 
 ```mermaid
 flowchart LR
-  V["Visitor /t/[handle]"] -->|SSR Hydration| Page["Next.js App Router"]
+  V["Visitor /t/[handle]"] -->|SSR Hydration| Page["Next.js 16 App Router"]
   O["Owner Studio /"] -->|HttpOnly Cookie| API["/api/trees/** + Zod"]
   V -->|POST /messages| API
-  API --> Store["Server Store (Upstash KV / Atomic JSON)"]
+  API --> Store["Store Adapters (Upstash KV / Atomic JSON / Memory)"]
+  API -->|after() Coalesced Push| SW["/sw.js Web Push"]
   Page --> OG["next/og Dynamic PNG (1200x630)"]
-  Page --> Canvas["AsciiTreeCanvas (3D Tree <-> Scannable QR)"]
+  Page --> Canvas["AsciiTreeCanvas (2D Canvas + GSAP)"]
 ```
+
+---
+
+## Screenshots
+
+| Owner Studio (`1440×900`) | Radial QR Mode (`1440×900`) |
+| :---: | :---: |
+| ![Owner Studio](docs/assets/studio.png) | ![QR Mode](docs/assets/qr.png) |
+
+| Private Mail Drawer (`1440×900`) | Mobile Visitor Composer & Sent (`390×844`) |
+| :---: | :---: |
+| ![Mail Drawer](docs/assets/mail.png) | ![Visitor Composer](docs/assets/visitor-composer.png) ![Visitor Success](docs/assets/visitor-success.png) |
 
 ---
 
@@ -82,12 +94,12 @@ flowchart LR
 
 | Layer | Technology |
 | :--- | :--- |
-| Framework & Routing | Next.js 16 (`App Router`, `standalone` output) + React 19 + TypeScript 6 |
+| Framework & Routing | Next.js 16 (`App Router`, `standalone`), React 19, TypeScript 6 |
 | Styling & UI Primitives | Tailwind CSS v4, `lucide-react`, `vaul`, `sonner`, `canvas-confetti` |
-| Validation & QR | `zod` v4, `qrcode` |
-| Canvas, Audio & Exports | HTML5 2D Canvas (`IntersectionObserver` + glow cache), Web Audio API, `next/og` |
-| Storage & Limits | `@upstash/redis` & `@upstash/ratelimit` (`hoho:v2:*`), Atomic JSON file (`file`), Memory fallback |
-| Testing & Tooling | Vitest 5, ESLint 9, TypeScript compiler (`tsc --noEmit`), `pnpm` |
+| Motion & Audio | `gsap` v3 (`SplitText`, `@gsap/react`), Web Audio API synthesizer + CC0 loader |
+| Validation, QR & Push | `zod` v4, `qrcode`, `web-push` v4 |
+| Storage & Rate Limits | `@upstash/redis` & `@upstash/ratelimit` (`hoho:v2:*`), Atomic JSON (`file`), Memory |
+| Verification | Vitest 5, ESLint 9, TypeScript (`tsc --noEmit`), Playwright headless Chromium |
 
 ---
 
@@ -100,11 +112,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-- **Owner Hub**: `http://localhost:3000`
-- **Public Visitor Page**: `http://localhost:3000/t/<your-handle>` *(after claiming a handle in Owner Studio)*
-- **Health Check**: `http://localhost:3000/api/health`
+Open `http://localhost:3000` in your browser, claim a handle on **Prompt**, share `/t/[handle]`, and inspect incoming ornaments in **Mail**.
 
-## Verification
+### Verification Suite
 
 ```powershell
 pnpm lint
@@ -119,21 +129,19 @@ pnpm build
 
 ### Vercel (+ Upstash Redis / Vercel KV — Required)
 
-> **Important:** **Vercel requires Upstash Redis / Vercel KV** (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL` / `KV_REST_API_TOKEN`). Without KV on Vercel in production, tree claims and note submissions return `503` (`Storage is not configured.`) and `/api/health` returns `503` (`durable: false`) rather than silently falling back to ephemeral instance memory.
+> **Important:** **Vercel requires Upstash Redis / Vercel KV** (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL` / `KV_REST_API_TOKEN`). Without KV on Vercel in production, tree claims and note submissions return `503` and `/api/health` returns `503` (`durable: false`) rather than falling back to ephemeral instance memory.
 
 1. Push this repository to GitHub and import into Vercel (`pnpm build`, Node 24+).
-2. Set `NEXT_PUBLIC_SITE_URL`, `HOHO_IP_SALT`, `HOHO_TRUSTED_PROXY=vercel`, and connect an **Upstash Redis** / **Vercel KV** database (see [.env.example](.env.example)).
-3. Deploy—`/api/health` will report `"storage": "kv"` and `"durable": true`, CSP/HSTS headers are active in [next.config.ts](next.config.ts), and `HttpOnly` `__Host-` owner cookies authenticate Owner Studio and Mail.
+2. Configure `NEXT_PUBLIC_SITE_URL`, `HOHO_IP_SALT`, `HOHO_TRUSTED_PROXY=vercel`, and connect an **Upstash Redis** database (see [.env.example](.env.example)).
+3. Deploy — `/api/health` reports `"storage": "kv"` and `"durable": true`, CSP/HSTS headers are active in [next.config.ts](next.config.ts), and `__Host-` `HttpOnly` cookies protect Owner Studio and Mail.
 
 ### Docker Standalone
 
-```powershell
+```bash
 pnpm build
 docker build -t hoho-xo .
 docker run --rm -p 3000:3000 -e NEXT_PUBLIC_SITE_URL=https://your-domain.com -v hoho_data:/app/.data hoho-xo
 ```
-
-The container pre-creates `/app/.data` owned by `nextjs:nodejs` (configurable via `HOHO_STORE_FILE`) and includes a built-in `HEALTHCHECK` targeting `/api/health`.
 
 ### Environment Variables
 
@@ -153,6 +161,12 @@ The container pre-creates `/app/.data` owned by `nextjs:nodejs` (configurable vi
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_*` | Optional | Off | VAPID public/private keys & subject (`mailto:...`) enabling owner Web Push alerts |
 
 ---
+
+## Repository Docs & Changelog
+
+- [SECURITY.md](SECURITY.md) — Vulnerability disclosure & privacy guarantees
+- [CHANGELOG.md](CHANGELOG.md) — Release notes across hardening, UI polish, and presentation
+- [docs/presentation.md](docs/presentation.md) — Demo recording workflow & GitHub Settings checklist
 
 ## License
 
