@@ -31,15 +31,27 @@ const mono = JetBrains_Mono({
 });
 
 const siteUrl = (() => {
-  try {
-    return new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://hoho.xo");
-  } catch {
-    return new URL("https://hoho.xo");
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      if (
+        parsed.hostname !== "your-domain.example" &&
+        parsed.origin !== "https://hoho.xo"
+      ) {
+        return parsed;
+      }
+    } catch {
+      // Ignore invalid URL
+    }
   }
+  return process.env.NODE_ENV !== "production"
+    ? new URL("http://localhost:3000")
+    : undefined;
 })();
 
 export const metadata: Metadata = {
-  metadataBase: siteUrl,
+  ...(siteUrl ? { metadataBase: siteUrl } : {}),
   title: "Hoho.xo — Anonymous Christmas Tree & QR Notes",
   description:
     "Share a 3D ASCII Christmas tree link in your bio or Story. Friends send anonymous notes that hang as ornaments.",

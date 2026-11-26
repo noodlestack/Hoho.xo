@@ -759,10 +759,13 @@ export function HohoExperience({
   );
 
   const theme = TREE_THEMES[config.themeId] ?? TREE_THEMES.fairy;
-  const effectiveOrigin = origin || "https://hoho.xo";
+  const effectiveOrigin = origin;
 
   const shareUrl = useMemo(() => {
     const clean = parseHandle(activeHandle);
+    if (!effectiveOrigin) {
+      return clean ? `/t/${clean}` : "/";
+    }
     if (!clean) {
       return effectiveOrigin;
     }
