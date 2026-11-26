@@ -44,6 +44,7 @@ import {
 import {
   clampStoryReply,
   INVITE_TEMPLATES,
+  STORY_ASPECT_FORMATS,
   STORY_REPLY_MAX_LENGTH,
 } from "./share-card";
 
@@ -320,12 +321,18 @@ describe("parseHandle strict validation", () => {
 });
 
 describe("Story card templates & privacy", () => {
-  it("exposes the 3 invite Story templates", () => {
+  it("exposes all 6 invite Story templates and 3 aspect ratios", () => {
     expect(INVITE_TEMPLATES.map((t) => t.id)).toEqual([
       "qr-forward",
       "big-prompt",
       "minimal",
+      "polaroid",
+      "receipt",
+      "sticker-note",
     ]);
+    expect(
+      STORY_ASPECT_FORMATS.map((f) => `${f.id}:${f.width}x${f.height}`),
+    ).toEqual(["story:1080x1920", "portrait:1080x1350", "square:1080x1080"]);
   });
 
   it("clamps owner replies to 140 chars and trims whitespace", () => {

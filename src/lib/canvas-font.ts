@@ -1,4 +1,5 @@
-export type CanvasFontCssVar = "--font-mono" | "--font-display" | "--font-sans";
+export type CanvasFontCssVar =
+  "--font-mono" | "--font-display" | "--font-sans" | "--font-handwriting";
 
 /**
  * Resolve a `next/font` generated CSS custom property to a real font-family
