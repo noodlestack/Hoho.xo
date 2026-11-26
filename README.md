@@ -20,7 +20,13 @@
 ---
 
 <!-- HERO_MEDIA_START -->
-> Live demo recording and updated studio/mobile screenshots follow below.
+<div align="center">
+
+![Hoho.xo Interactive Demo](docs/assets/demo.gif)
+
+<sub>Prefer HD video? Download or watch [`docs/assets/demo.mp4`](docs/assets/demo.mp4).</sub>
+
+</div>
 <!-- HERO_MEDIA_END -->
 
 **Hoho.xo** turns your bio link into a volumetric, ASCII-rendered 3D Christmas tree that morphs into a scannable dark-canvas QR code. Visitors open `/t/[handle]` with zero sign-in to hang anonymous notes as jewel ornaments—then Owners unwrap them inside a private `HttpOnly`-cookie Mail drawer and export `1080×1920` Instagram/TikTok Story cards.
