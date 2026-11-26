@@ -12,7 +12,8 @@
 [![React](https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Vitest](https://img.shields.io/badge/Vitest-61_Passing-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-62_Passing-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Live Demo](https://img.shields.io/badge/Live-hoho--xo.vercel.app-F5C451?style=flat-square&logo=vercel&logoColor=white)](https://hoho-xo.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F5C451?style=flat-square)](LICENSE)
 
 </div>
@@ -58,11 +59,11 @@
 
 ```mermaid
 flowchart LR
-  V["Visitor /t/[handle]"] -->|SSR Hydration| Page["Next.js 16 App Router"]
-  O["Owner Studio /"] -->|HttpOnly Cookie| API["/api/trees/** + Zod"]
-  V -->|POST /messages| API
+  V["Visitor /t/[handle]"] -->|"SSR Hydration"| Page["Next.js 16 App Router"]
+  O["Owner Studio /"] -->|"HttpOnly Cookie"| API["/api/trees/** + Zod"]
+  V -->|"POST /messages"| API
   API --> Store["Store Adapters (Upstash KV / Atomic JSON / Memory)"]
-  API -->|after() Coalesced Push| SW["/sw.js Web Push"]
+  API -->|"Coalesced Web Push"| SW["/sw.js Web Push"]
   Page --> OG["next/og Dynamic PNG (1200x630)"]
   Page --> Canvas["AsciiTreeCanvas (2D Canvas + GSAP)"]
 ```
@@ -71,13 +72,17 @@ flowchart LR
 
 ## Screenshots
 
-| Owner Studio (`1440×900`) | Radial QR Mode (`1440×900`) |
-| :---: | :---: |
-| ![Owner Studio](docs/assets/studio.png) | ![QR Mode](docs/assets/qr.png) |
+| Owner Studio (`1440×900`) | Radial QR Mode (`1440×900`) | Private Mail Drawer (`1440×900`) |
+| :---: | :---: | :---: |
+| ![Owner Studio](docs/assets/studio.png) | ![QR Mode](docs/assets/qr.png) | ![Mail Drawer](docs/assets/mail.png) |
 
-| Private Mail Drawer (`1440×900`) | Mobile Visitor Composer & Sent (`390×844`) |
+<div align="center">
+
+| Mobile Visitor Composer (`390×844`) | Mobile Post-Send Hero (`390×844`) |
 | :---: | :---: |
-| ![Mail Drawer](docs/assets/mail.png) | ![Visitor Composer](docs/assets/visitor-composer.png) ![Visitor Success](docs/assets/visitor-success.png) |
+| <img src="docs/assets/visitor-composer.png" width="260" alt="Mobile Visitor Composer" /> | <img src="docs/assets/visitor-success.png" width="260" alt="Mobile Post-Send Celebration" /> |
+
+</div>
 
 ---
 

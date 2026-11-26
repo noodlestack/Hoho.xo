@@ -16,9 +16,9 @@ Encoding parameters (`ffmpeg`):
 
 Once pushed to `main`, finish these one-time GitHub UI settings on **noodlestack/Hoho.xo**:
 
-- [ ] **Social Preview**: Repository *Settings -> General -> Social preview -> Upload an image...* -> upload [`docs/assets/social-preview.png`](assets/social-preview.png) (`1280×640`).
-- [ ] **About Description**: *"Your bio link, as a luminous 3D ASCII Christmas tree & scannable QR code for anonymous notes."*
-- [ ] **Website**: Your deployed Vercel or custom domain URL.
-- [ ] **Topics**: `nextjs`, `react`, `typescript`, `ascii-art`, `qr-code`, `christmas`, `anonymous-messages`, `canvas`, `tailwindcss`, `upstash`
-- [ ] **Features**: Keep Issues/Discussions enabled as desired; Projects/Wiki optional.
-- [ ] **Security Advisories**: Enable Private Vulnerability Reporting under *Settings -> Code security and analysis* (paired with [`SECURITY.md`](../SECURITY.md)).
+- [x] **Social Preview**: Repository *Settings -> General -> Social preview -> Upload an image...* -> upload [`docs/assets/social-preview.png`](assets/social-preview.png) (`1280×640`).
+- [x] **About Description**: *"Your bio link, as a luminous 3D ASCII Christmas tree & scannable QR code for anonymous notes."*
+- [x] **Website**: `https://hoho-xo.vercel.app`
+- [x] **Topics**: `nextjs`, `react`, `typescript`, `ascii-art`, `qr-code`, `christmas`, `anonymous-messages`, `canvas`, `tailwindcss`, `upstash`
+- [x] **Features**: Issues, README media, and repository metadata configured cleanly.
+- [x] **Security Advisories**: Enabled Private Vulnerability Reporting under *Settings -> Code security and analysis* (paired with [`SECURITY.md`](../SECURITY.md)).
