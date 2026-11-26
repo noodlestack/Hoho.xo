@@ -108,7 +108,9 @@ describe("tree slots and ornament collision rules", () => {
       slotPosition3D(idx),
     );
     const keys = new Set(
-      coords.map((c) => `${c.x.toFixed(3)},${c.y.toFixed(3)},${c.z.toFixed(3)}`),
+      coords.map(
+        (c) => `${c.x.toFixed(3)},${c.y.toFixed(3)},${c.z.toFixed(3)}`,
+      ),
     );
     expect(keys.size).toBe(SLOT_COUNT);
     expect(coords.every((c) => c.y >= 0.7 && c.y <= 9.2)).toBe(true);
@@ -240,7 +242,9 @@ describe("moderation normalization and classification", () => {
     expect(classifyMessage("visit https://spam.example.com").decision).toBe(
       "reject",
     );
-    expect(classifyMessage("email me test@example.com").decision).toBe("reject");
+    expect(classifyMessage("email me test@example.com").decision).toBe(
+      "reject",
+    );
     expect(classifyMessage("call +1 555-234-5678").decision).toBe("reject");
     expect(
       classifyMessage("Here is a big spoiler alert", "spam, spoiler").decision,
@@ -266,9 +270,9 @@ describe("Christmas music box and festive chime safety", () => {
       expect(track.title.length).toBeGreaterThan(2);
       expect(track.tempoBpm).toBeGreaterThanOrEqual(70);
       expect(track.notes.length).toBeGreaterThan(10);
-      expect(
-        track.notes.every(([freq, beats]) => freq >= 0 && beats > 0),
-      ).toBe(true);
+      expect(track.notes.every(([freq, beats]) => freq >= 0 && beats > 0)).toBe(
+        true,
+      );
     }
   });
 
@@ -328,5 +332,51 @@ describe("Story card templates & privacy", () => {
     expect(STORY_REPLY_MAX_LENGTH).toBe(140);
     expect(clampStoryReply("  thank you!  ")).toBe("thank you!");
     expect(clampStoryReply("a".repeat(220))).toHaveLength(140);
+  });
+});
+
+describe("blue-noise foliage silhouette density", () => {
+  it("fills at least 85% of projected interior cone cells on a classic dense cloud", () => {
+    const matrix = createQrMatrix("https://hoho.xo/t/demo");
+    expect(matrix.ok).toBe(true);
+    if (!matrix.ok) return;
+
+    const cloud = generateQrTreeCloud(matrix, "https://hoho.xo/t/demo", {
+      dense: true,
+      shape: "classic",
+    });
+
+    const cols = 48;
+    const rows = 42;
+    const filled = new Set<string>();
+    for (const pt of cloud) {
+      if (pt.kind !== "foliage" && pt.kind !== "garland") continue;
+      const col = Math.floor(((pt.x + 3.65) / 7.3) * cols);
+      const row = Math.floor(((pt.y - 0.55) / 9.25) * rows);
+      if (col >= 0 && col < cols && row >= 0 && row < rows) {
+        filled.add(`${col}:${row}`);
+      }
+    }
+
+    let interiorTotal = 0;
+    let interiorHit = 0;
+    for (let row = 2; row < rows - 2; row += 1) {
+      const hFrac = (row + 0.5) / rows;
+      const tierPhase = (hFrac * 5) % 1;
+      const tierFactor = 0.66 + 0.34 * (1 - tierPhase);
+      const halfConeW = 3.65 * (1 - hFrac * 0.94) * tierFactor * 0.82;
+      for (let col = 0; col < cols; col += 1) {
+        const x = ((col + 0.5) / cols) * 7.3 - 3.65;
+        if (Math.abs(x) <= halfConeW) {
+          interiorTotal += 1;
+          if (filled.has(`${col}:${row}`)) {
+            interiorHit += 1;
+          }
+        }
+      }
+    }
+
+    expect(interiorTotal).toBeGreaterThan(200);
+    expect(interiorHit / interiorTotal).toBeGreaterThanOrEqual(0.85);
   });
 });

@@ -129,9 +129,9 @@ export function slotPosition3D(
   };
 }
 
-export function resolveTreeOrnaments<
-  T extends { seq: number; status: string },
->(messages: readonly T[]): Array<T & { slot: number }> {
+export function resolveTreeOrnaments<T extends { seq: number; status: string }>(
+  messages: readonly T[],
+): Array<T & { slot: number }> {
   const eligible = messages
     .filter((m) => m.status === "visible")
     .sort((a, b) => b.seq - a.seq);
@@ -156,7 +156,8 @@ export function createTreeGlyphTargets(
   count: number,
   seed: string,
 ): TreeGlyphTarget[] {
-  if (!Number.isInteger(count) || count < 0 || count > MAX_TREE_GLYPHS) return [];
+  if (!Number.isInteger(count) || count < 0 || count > MAX_TREE_GLYPHS)
+    return [];
 
   const random = mulberry32(hashString(seed));
   return Array.from({ length: count }, () => {
@@ -188,25 +189,34 @@ export function generateQrTreeCloud(
   const size = matrix.size;
 
   const isDarkModuleAtNormalized = (nx: number, nz: number): boolean => {
-    const col = Math.floor(((nx + 1) * 0.5) * size);
-    const row = Math.floor(((nz + 1) * 0.5) * size);
+    const col = Math.floor((nx + 1) * 0.5 * size);
+    const row = Math.floor((nz + 1) * 0.5 * size);
     if (col < 0 || col >= size || row < 0 || row >= size) return false;
     return matrix.grid[row * size + col] === 1;
   };
 
   const radiusScale =
-    shape === "spire" ? 0.74 : shape === "wide" ? 1.2 : shape === "layered" ? 1.04 : 1.0;
+    shape === "spire"
+      ? 0.74
+      : shape === "wide"
+        ? 1.2
+        : shape === "layered"
+          ? 1.04
+          : 1.0;
   const heightMult = shape === "spire" ? 1.05 : shape === "wide" ? 0.94 : 1.0;
   const tierCount = shape === "layered" ? 6 : 5;
   const tierDepth = shape === "layered" ? 0.46 : shape === "wide" ? 0.22 : 0.34;
 
-  // 1. Stepped-cone foliage constrained to dark QR modules
-  const targetFoliage = dense ? 6600 : 3400;
+  // 1. Stepped-cone blue-noise Fibonacci foliage constrained to dark QR modules
+  const targetFoliage = dense ? 8400 : 4400;
+  const goldenAngle = 2.399963229728653;
   let attempts = 0;
   let foliageCount = 0;
   while (foliageCount < targetFoliage && attempts < targetFoliage * 8) {
     attempts += 1;
-    const hFrac = Math.pow(random(), 0.76);
+    const rawU = (foliageCount + 0.5 + (random() - 0.5) * 0.65) / targetFoliage;
+    const u = Math.max(0.002, Math.min(0.998, rawU));
+    const hFrac = Math.pow(u, 0.78);
     const y = 0.55 + hFrac * (TREE_HEIGHT * heightMult - 0.75);
 
     const tierPhase = (hFrac * tierCount) % 1;
@@ -217,9 +227,9 @@ export function generateQrTreeCloud(
       (1 - hFrac * (shape === "wide" ? 0.88 : 0.94)) *
       tierFactor;
 
-    const radialBias = Math.pow(random(), 0.38);
+    const radialBias = Math.pow(0.18 + 0.82 * random(), 0.42);
     const r = maxR * radialBias;
-    const theta = random() * Math.PI * 2;
+    const theta = foliageCount * goldenAngle + (random() - 0.5) * 0.35;
     const nx = Math.cos(theta);
     const nz = Math.sin(theta);
     const x = r * nx;
@@ -228,18 +238,25 @@ export function generateQrTreeCloud(
     const qrX = x / (TREE_BASE_RADIUS * radiusScale);
     const qrZ = z / (TREE_BASE_RADIUS * radiusScale);
 
-    if (!isDarkModuleAtNormalized(qrX, qrZ) && random() < 0.86) {
+    if (!isDarkModuleAtNormalized(qrX, qrZ) && random() < 0.68) {
       continue;
     }
 
     // Spiral garland ribbon along outer branches
-    const normalizedAngle = ((theta / (Math.PI * 2)) % 1 + 1) % 1;
+    const normalizedAngle = (((theta / (Math.PI * 2)) % 1) + 1) % 1;
     const spiralDist = Math.abs(((normalizedAngle + hFrac * 3.5) % 1) - 0.5);
     const isGarland = radialBias > 0.76 && spiralDist < 0.052;
     const isLight =
-      !isGarland && radialBias > 0.62 && hFrac > 0.04 && hFrac < 0.96 && random() < 0.24;
+      !isGarland &&
+      radialBias > 0.62 &&
+      hFrac > 0.04 &&
+      hFrac < 0.96 &&
+      random() < 0.24;
 
-    const shade = Math.min(3, Math.floor((hFrac * 0.45 + radialBias * 0.55) * 4));
+    const shade = Math.min(
+      3,
+      Math.floor((hFrac * 0.45 + radialBias * 0.55) * 4),
+    );
     const isTwinkle = !isGarland && !isLight && random() < 0.1;
 
     points.push({

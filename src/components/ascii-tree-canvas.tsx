@@ -255,6 +255,21 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     startedAt: 0,
   });
   const hoveredIdRef = useRef<string | null>(null);
+  const qualityTierRef = useRef<"high" | "medium" | "low">(
+    layout.quality === "low" ? "low" : "high",
+  );
+  const perfMonitorRef = useRef({
+    emaMs: 16.6,
+    slowStreak: 0,
+    skipFrames: 3,
+    lastFps: 60,
+  });
+  const debugHud = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("debug") === "1",
+    [],
+  );
   const growStateRef = useRef({
     foliage: reducedMotion ? 1 : 0,
     garland: reducedMotion ? 1 : 0,
@@ -330,8 +345,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       phase: rng() * Math.PI * 2,
       alpha: 0.16 + rng() * 0.36,
     }));
-    const flakes: Snowflake[] = Array.from({ length: 130 }, (_, i) => {
-      const layer = i < 70 ? "far" : "near";
+    const flakes: Snowflake[] = Array.from({ length: 120 }, (_, i) => {
+      const layer = i < 72 ? "far" : "near";
       return {
         x: rng(),
         y: rng(),
@@ -482,10 +497,44 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
       const curReduced = curReducedRaw || Boolean(curStatic);
       const effectiveNow = curStatic ? 12000 : now;
+      const rawDtMs = curStatic
+        ? 16.6
+        : Math.min(100, Math.max(1, effectiveNow - lastTime));
       const dt = curStatic
         ? 0
         : Math.min(0.05, Math.max(0, (effectiveNow - lastTime) / 1000));
       lastTime = effectiveNow;
+
+      const perf = perfMonitorRef.current;
+      if (!curReduced && !hidden && inViewport) {
+        if (perf.skipFrames > 0) {
+          perf.skipFrames -= 1;
+        } else {
+          perf.emaMs = perf.emaMs * 0.9 + rawDtMs * 0.1;
+          perf.lastFps = Math.round(1000 / Math.max(1, perf.emaMs));
+          if (rawDtMs > 24) {
+            perf.slowStreak += 1;
+          } else {
+            perf.slowStreak = Math.max(0, perf.slowStreak - 1);
+          }
+          if (
+            perf.slowStreak >= 24 ||
+            (perf.emaMs > 24 && perf.slowStreak >= 12)
+          ) {
+            if (qualityTierRef.current === "high") {
+              qualityTierRef.current = "medium";
+            } else if (qualityTierRef.current === "medium") {
+              qualityTierRef.current = "low";
+            }
+            perf.slowStreak = 0;
+            perf.emaMs = 16.6;
+          }
+        }
+      }
+      const activeTier =
+        curLayout.quality === "low" ? "low" : qualityTierRef.current;
+      const effectiveDprCap =
+        activeTier === "low" ? 1 : activeTier === "medium" ? 1.5 : 2;
       const tSec = effectiveNow * 0.001;
       if (curStatic) {
         yawRef.current = 0.25;
@@ -530,7 +579,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       const rect = canvas.getBoundingClientRect();
       const cssW = Math.max(1, rect.width);
       const cssH = Math.max(1, rect.height);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, effectiveDprCap);
       const pxW = Math.round(cssW * dpr);
       const pxH = Math.round(cssH * dpr);
 
@@ -675,10 +724,22 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
       // 1b. Twinkling stars (dense constellation boost in starlight scenery)
       const bgAlphaScale = 1 - st.qrMix * 0.65;
-      const starLimit =
+      const baseStarLimit =
         curScenery === "starlight"
           ? backdrop.stars.length
           : Math.min(130, backdrop.stars.length);
+      const starLimit =
+        activeTier === "low"
+          ? Math.min(50, baseStarLimit)
+          : activeTier === "medium"
+            ? Math.min(90, baseStarLimit)
+            : baseStarLimit;
+      const snowLimit =
+        activeTier === "low"
+          ? 28
+          : activeTier === "medium"
+            ? 64
+            : backdrop.flakes.length;
       ctx.font = `500 ${Math.max(8, Math.round(fontSize * 0.9))}px ${fontFamily}`;
       for (let i = 0; i < starLimit; i += 1) {
         const star = backdrop.stars[i];
@@ -726,7 +787,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
                 : Math.max(7.5, Math.round(fontSize * 0.85))
             }px ${fontFamily}`;
 
-            for (let i = 0; i < backdrop.flakes.length; i += 1) {
+            const maxFlakes = Math.min(snowLimit, backdrop.flakes.length);
+            for (let i = 0; i < maxFlakes; i += 1) {
               const flake = backdrop.flakes[i];
               if (flake.layer !== layer) continue;
               const fy = curReduced
@@ -1029,7 +1091,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
         // Glow sprite pass behind only the brightest quarter of active twinkle lights
         const activeSprite = glowSpriteRef.current;
-        if (brightLightHalos.length > 0 && activeSprite) {
+        if (
+          brightLightHalos.length > 0 &&
+          activeSprite &&
+          activeTier !== "low"
+        ) {
           const lightGlowSize = activeScale * 0.85;
           ctx.save();
           ctx.globalCompositeOperation = "lighter";
@@ -1191,31 +1257,74 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               }
             }
           } else {
-            // Multi-line dense golden xmasqr-style ASCII star apex
-            const starGrid = [
-              "##",
-              "%%%%",
-              "*##%%%@@@@%%%##",
-              "%%%%@@@@@@%%%%#",
-              "%@@@@@@%",
-              "%%%%@%%%%",
-              "###%#%@#%",
-            ];
-            const starStepX = Math.max(4.6, cellW * 0.86);
-            const starStepY = Math.max(6.8, fontSize * 0.74);
-            for (let r = 0; r < starGrid.length; r += 1) {
-              const line = starGrid[r];
-              const halfLen = (line.length - 1) / 2;
-              for (let c = 0; c < line.length; c += 1) {
-                const ch = line[c];
-                if (ch === " ") continue;
-                ctx.fillText(
-                  ch,
-                  apex.sx + (c - halfLen) * starStepX,
-                  apex.sy + (r - 3.6) * starStepY,
-                );
+            // Crisp 5-point luminous vector star with lens-flare cross rays & subtle sparkle accents
+            const starX = apex.sx;
+            const starY = apex.sy - fontSize * 0.25;
+            const outerR = starRadiusPx * 1.02;
+            const innerR = starRadiusPx * 0.43;
+
+            const rayLen = outerR * 1.65;
+            ctx.save();
+            ctx.globalAlpha *= 0.55;
+            ctx.strokeStyle = curTheme.star;
+            ctx.lineWidth = Math.max(1.2, outerR * 0.11);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(starX - rayLen, starY);
+            ctx.lineTo(starX + rayLen, starY);
+            ctx.moveTo(starX, starY - rayLen);
+            ctx.lineTo(starX, starY + rayLen);
+            ctx.stroke();
+            ctx.restore();
+
+            const coreGrad = ctx.createRadialGradient(
+              starX,
+              starY,
+              innerR * 0.15,
+              starX,
+              starY,
+              outerR,
+            );
+            coreGrad.addColorStop(0, "#FFFDF2");
+            coreGrad.addColorStop(0.55, curTheme.star);
+            coreGrad.addColorStop(1, "#D99B26");
+
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            for (let i = 0; i < 10; i += 1) {
+              const r = i % 2 === 0 ? outerR : innerR;
+              const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+              const px = starX + Math.cos(angle) * r;
+              const py = starY + Math.sin(angle) * r;
+              if (i === 0) {
+                ctx.moveTo(px, py);
+              } else {
+                ctx.lineTo(px, py);
               }
             }
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+            ctx.beginPath();
+            ctx.arc(starX, starY, innerR * 0.34, 0, Math.PI * 2);
+            ctx.fill();
+
+            const glintOffset = outerR * 1.12;
+            ctx.font = `700 ${Math.max(7, Math.round(fontSize * 0.78))}px ${fontFamily}`;
+            ctx.fillStyle = curTheme.star;
+            ctx.fillText("*", starX - glintOffset, starY - glintOffset * 0.55);
+            ctx.fillText("+", starX + glintOffset, starY - glintOffset * 0.45);
+            ctx.fillText(
+              "+",
+              starX - glintOffset * 0.85,
+              starY + glintOffset * 0.65,
+            );
+            ctx.fillText(
+              "*",
+              starX + glintOffset * 0.85,
+              starY + glintOffset * 0.65,
+            );
           }
           ctx.restore();
         }
@@ -1471,6 +1580,38 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         }
       }
       projectedOrnamentsRef.current = hitList;
+
+      if (debugHud) {
+        ctx.save();
+        const hudX = 14;
+        const hudY = 72;
+        const hudW = 280;
+        const hudH = 44;
+        ctx.fillStyle = "rgba(11, 13, 18, 0.88)";
+        ctx.strokeStyle = "#F5C451";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(hudX, hudY, hudW, hudH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = `600 11px ${fontFamily}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#F2EDE4";
+        ctx.fillText(
+          `FPS ${perf.lastFps} · ${perf.emaMs.toFixed(1)}ms · tier:${activeTier}`,
+          hudX + 10,
+          hudY + 14,
+        );
+        ctx.fillStyle = "#F5C451";
+        ctx.fillText(
+          `dpr:${dpr.toFixed(2)} · snow:${snowLimit} · pts:${curCloud.length} · orn:${curOrnaments.length}`,
+          hudX + 10,
+          hudY + 30,
+        );
+        ctx.restore();
+      }
     };
 
     const tick = (now: number) => {
@@ -1505,6 +1646,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     const handleVisibility = () => {
       hidden = document.hidden;
       lastTime = performance.now();
+      perfMonitorRef.current.skipFrames = 3;
       if (rafId) {
         cancelAnimationFrame(rafId);
         rafId = 0;
@@ -1614,7 +1756,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
     };
-  }, [backdrop]);
+  }, [backdrop, debugHud]);
 
   function findOrnamentAt(
     clientX: number,

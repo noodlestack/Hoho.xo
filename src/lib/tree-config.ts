@@ -1,20 +1,11 @@
 import { isTreeThemeId, type TreeThemeId } from "./tree-themes";
 
 export type TreeTopperId =
-  | "star"
-  | "diamond"
-  | "snowflake"
-  | "heart"
-  | "crown"
-  | "ribbon";
+  "star" | "diamond" | "snowflake" | "heart" | "crown" | "ribbon";
 
 export type TreeShapeId = "classic" | "layered" | "spire" | "wide";
 export type TreeSceneryId =
-  | "snowfall"
-  | "aurora"
-  | "starlight"
-  | "blizzard"
-  | "hearth";
+  "snowfall" | "aurora" | "starlight" | "blizzard" | "hearth";
 
 export interface TreeTopperMeta {
   id: TreeTopperId;
@@ -215,7 +206,7 @@ export function defaultTreeConfig(handle = ""): TreeConfig {
     avatar: "",
     prompt: OWNER_PROMPT_PRESETS[0],
     mutedWords: "",
-    themeId: "fairy",
+    themeId: "classic",
     topper: "star",
     shape: "classic",
     scenery: "snowfall",
@@ -240,8 +231,7 @@ export function loadTreeConfig(handle = ""): TreeConfig {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return fallback;
     const obj = parsed as Record<string, unknown>;
-    const candidateTheme =
-      typeof obj.themeId === "string" ? obj.themeId : null;
+    const candidateTheme = typeof obj.themeId === "string" ? obj.themeId : null;
 
     return {
       handle: clean,
@@ -250,7 +240,9 @@ export function loadTreeConfig(handle = ""): TreeConfig {
           ? obj.displayName.trim().slice(0, 40)
           : fallback.displayName,
       avatar:
-        typeof obj.avatar === "string" ? obj.avatar.slice(0, 4) : fallback.avatar,
+        typeof obj.avatar === "string"
+          ? obj.avatar.slice(0, 4)
+          : fallback.avatar,
       prompt:
         typeof obj.prompt === "string" && obj.prompt.trim().length > 0
           ? obj.prompt.trim().slice(0, 140)
@@ -334,7 +326,10 @@ export function buildDesignShareUrl(
   if (config.scenery !== defaults.scenery) {
     url.searchParams.set("sc", config.scenery);
   }
-  if (config.displayName.trim() && config.displayName.trim() !== defaults.displayName) {
+  if (
+    config.displayName.trim() &&
+    config.displayName.trim() !== defaults.displayName
+  ) {
     url.searchParams.set("n", config.displayName.trim().slice(0, 40));
   }
   if (config.avatar) {
@@ -372,15 +367,19 @@ export function parseDesignFromSearchParams(
   if (isTreeTopperId(topperParam)) next.topper = topperParam;
   if (isTreeShapeId(shapeParam)) next.shape = shapeParam;
   if (isTreeSceneryId(sceneryParam)) next.scenery = sceneryParam;
-  if (nameParam && nameParam.trim()) next.displayName = nameParam.trim().slice(0, 40);
+  if (nameParam && nameParam.trim())
+    next.displayName = nameParam.trim().slice(0, 40);
   if (avatarParam !== null) next.avatar = avatarParam.slice(0, 4);
-  if (promptParam && promptParam.trim()) next.prompt = promptParam.trim().slice(0, 140);
+  if (promptParam && promptParam.trim())
+    next.prompt = promptParam.trim().slice(0, 140);
   if (snowParam === "0" || snowParam === "1") next.showSnow = snowParam === "1";
-  if (garlandParam === "0" || garlandParam === "1") next.showGarland = garlandParam === "1";
+  if (garlandParam === "0" || garlandParam === "1")
+    next.showGarland = garlandParam === "1";
   if (ornamentsParam === "0" || ornamentsParam === "1") {
     next.showOrnaments = ornamentsParam === "1";
   }
-  if (pauseParam === "1" || pauseParam === "0") next.pauseInbox = pauseParam === "1";
+  if (pauseParam === "1" || pauseParam === "0")
+    next.pauseInbox = pauseParam === "1";
 
   return next;
 }
