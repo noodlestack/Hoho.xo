@@ -21,13 +21,29 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   AsciiTreeCanvas,
   type CameraViewMode,
   type ResolvedOrnament,
 } from "@/components/ascii-tree-canvas";
+import {
+  getKeyboardShortcuts,
+  readVisitorDraft,
+  writeVisitorDraft,
+  type ClaimApiResponse,
+  type ClaimOutcome,
+  type PublicTreeApiResponse,
+  type StudioTab,
+} from "@/components/hoho/experience-helpers";
 import {
   classifyMessage,
   loadStoredMessages,
@@ -82,75 +98,11 @@ const MessageCardSheet = dynamic(
 );
 
 export type ExperienceMode = "owner" | "visitor";
-type StudioTab = "share" | "style" | "prompt";
 
 interface HohoExperienceProps {
   mode: ExperienceMode;
   initialHandle?: string;
   initialPublicTree?: PublicTreeData;
-}
-
-const DRAFT_STORAGE_PREFIX = "hoho_draft";
-
-function readVisitorDraft(handle: string): string {
-  if (typeof window === "undefined") return "";
-  const parsed = parseHandle(handle);
-  if (!parsed) return "";
-  try {
-    return window.sessionStorage.getItem(`${DRAFT_STORAGE_PREFIX}_${parsed}`) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeVisitorDraft(handle: string, draft: string): void {
-  if (typeof window === "undefined") return;
-  const parsed = parseHandle(handle);
-  if (!parsed) return;
-  try {
-    const key = `${DRAFT_STORAGE_PREFIX}_${parsed}`;
-    if (draft.length > 0) {
-      window.sessionStorage.setItem(key, draft);
-    } else {
-      window.sessionStorage.removeItem(key);
-    }
-  } catch {
-    // Ignore storage quota errors cleanly
-  }
-}
-
-interface ClaimApiResponse {
-  ok?: boolean;
-  handle?: string;
-  created?: boolean;
-  ownerKey?: string;
-  config?: TreeConfig;
-  messages?: TreeMessage[];
-  error?: string;
-}
-
-interface PublicTreeApiResponse {
-  ok?: boolean;
-  handle?: string;
-  claimed?: boolean;
-  config?: TreeConfig;
-  ornaments?: Array<{
-    id: string;
-    seq: number;
-    ornamentType: number;
-    colorIdx: number;
-    seed: number;
-    status: "visible";
-    readAt: null;
-    createdAt: string;
-  }>;
-  totalVisible?: number;
-}
-
-interface ClaimOutcome {
-  status: number;
-  data: ClaimApiResponse;
-  usedKey: string;
 }
 
 const inflightClaims = new Map<string, Promise<ClaimOutcome>>();
@@ -1499,25 +1451,12 @@ export function HohoExperience({
                 >
                   <p className="shortcuts-title">Shortcuts</p>
                   <div className="shortcuts-grid">
-                    <kbd>Q</kbd>
-                    <span>Toggle QR code</span>
-                    <kbd>T</kbd>
-                    <span>Top-down view</span>
-                    {isOwnerMode ? (
-                      <>
-                        <kbd>M</kbd>
-                        <span>Open Mail drawer</span>
-                      </>
-                    ) : (
-                      <>
-                        <kbd>N</kbd>
-                        <span>Focus note composer</span>
-                      </>
-                    )}
-                    <kbd>← / →</kbd>
-                    <span>Rotate 3D tree</span>
-                    <kbd>Scroll</kbd>
-                    <span>Zoom / pinch scale</span>
+                    {getKeyboardShortcuts(isOwnerMode).map((item) => (
+                      <Fragment key={item.key}>
+                        <kbd>{item.key}</kbd>
+                        <span>{item.label}</span>
+                      </Fragment>
+                    ))}
                   </div>
                 </div>
               ) : null}
