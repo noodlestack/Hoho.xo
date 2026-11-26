@@ -72,6 +72,7 @@ export interface TreeConfig {
   showOrnaments: boolean;
   pauseInbox: boolean;
   christmasLock: boolean;
+  supporter?: boolean;
 }
 
 export const OWNER_PROMPT_PRESETS: string[] = [
@@ -215,6 +216,7 @@ export function defaultTreeConfig(handle = ""): TreeConfig {
     showOrnaments: true,
     pauseInbox: false,
     christmasLock: false,
+    supporter: false,
   };
 }
 
@@ -275,6 +277,8 @@ export function loadTreeConfig(handle = ""): TreeConfig {
         typeof obj.christmasLock === "boolean"
           ? obj.christmasLock
           : fallback.christmasLock,
+      supporter:
+        typeof obj.supporter === "boolean" ? obj.supporter : fallback.supporter,
     };
   } catch {
     return fallback;

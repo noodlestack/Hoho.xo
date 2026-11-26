@@ -83,6 +83,7 @@ interface AsciiTreeCanvasProps {
   latestDroppedId: string | null;
   reducedMotion: boolean;
   staticMode?: boolean;
+  supporter?: boolean;
   isOwnerMode: boolean;
   onSelectOrnament: (ornament: ResolvedOrnament) => void;
   onToggleQrView: () => void;
@@ -177,6 +178,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   latestDroppedId,
   reducedMotion,
   staticMode = false,
+  supporter = false,
   isOwnerMode,
   onSelectOrnament,
   onToggleQrView,
@@ -386,6 +388,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     ornaments,
     reducedMotion,
     staticMode,
+    supporter,
     isOwnerMode,
     layout,
   });
@@ -410,6 +413,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       ornaments,
       reducedMotion,
       staticMode,
+      supporter,
       isOwnerMode,
       layout,
     };
@@ -458,6 +462,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     ornaments,
     reducedMotion,
     staticMode,
+    supporter,
     isOwnerMode,
     layout,
     onZoomChange,
@@ -492,6 +497,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         ornaments: curOrnaments,
         reducedMotion: curReducedRaw,
         staticMode: curStatic,
+        supporter: curSupporter,
         layout: curLayout,
       } = propsRef.current;
 
@@ -1325,6 +1331,24 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               starX + glintOffset * 0.85,
               starY + glintOffset * 0.65,
             );
+          }
+
+          if (curSupporter) {
+            ctx.save();
+            ctx.globalAlpha *= 0.68;
+            ctx.strokeStyle = "#F5C451";
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(
+              apex.sx,
+              apex.sy - fontSize * 0.2,
+              starRadiusPx * 1.62,
+              0,
+              Math.PI * 2,
+            );
+            ctx.stroke();
+            ctx.restore();
           }
           ctx.restore();
         }

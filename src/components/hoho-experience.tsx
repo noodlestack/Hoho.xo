@@ -113,6 +113,11 @@ const InviteStorySheet = dynamic(
   { ssr: false },
 );
 
+const SupportSheet = dynamic(
+  () => import("@/components/support-sheet").then((m) => m.SupportSheet),
+  { ssr: false },
+);
+
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ?? "";
 
 const VISITOR_SNAP_POINTS = [0.28, 0.55, 0.92] as const;
@@ -187,6 +192,7 @@ export function HohoExperience({
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [inviteSheetOpen, setInviteSheetOpen] = useState<boolean>(false);
+  const [supportOpen, setSupportOpen] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed] = useState<boolean>(false);
   const [pushBusy, setPushBusy] = useState<boolean>(false);
   const [iosNeedsStandalone, setIosNeedsStandalone] = useState<boolean>(false);
@@ -1522,6 +1528,7 @@ export function HohoExperience({
             latestDroppedId={latestDroppedId}
             reducedMotion={reducedMotion || staticMode}
             staticMode={staticMode}
+            supporter={Boolean(config.supporter)}
             isOwnerMode={isOwnerMode}
             onSelectOrnament={handleSelectOrnament}
             onToggleQrView={() =>
@@ -1796,6 +1803,9 @@ export function HohoExperience({
                         </p>
                         <p className="bio-handle-line">
                           <span>@{activeHandle}</span>
+                          {config.supporter ? (
+                            <span className="supporter-badge">★ Supporter</span>
+                          ) : null}
                           <span>·</span>
                           <span
                             className={`status-dot ${
@@ -2674,7 +2684,19 @@ export function HohoExperience({
             <span className="credit-badge">
               made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
             </span>
-            <span className="inline-flex items-center gap-2 text-[11px] opacity-75">
+            <span className="inline-flex items-center gap-2 text-[12px] opacity-80">
+              {isOwnerMode ? (
+                <>
+                  <button
+                    type="button"
+                    className="footer-support-btn"
+                    onClick={() => setSupportOpen(true)}
+                  >
+                    Support
+                  </button>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
               <Link href="/privacy" className="hover:underline">
                 Privacy
               </Link>
@@ -2923,6 +2945,32 @@ export function HohoExperience({
                         />
                       </div>
                     )}
+                    <footer className="panel-footer">
+                      <span className="credit-badge">
+                        made by <strong>noodlestack</strong> ·{" "}
+                        <span>Hoho.xo</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2 text-[12px] opacity-85">
+                        <button
+                          type="button"
+                          className="footer-support-btn"
+                          onClick={() => {
+                            setMobileSheetOpen(false);
+                            setSupportOpen(true);
+                          }}
+                        >
+                          Support
+                        </button>
+                        <span aria-hidden="true">·</span>
+                        <Link href="/privacy" className="hover:underline">
+                          Privacy
+                        </Link>
+                        <span aria-hidden="true">·</span>
+                        <Link href="/terms" className="hover:underline">
+                          Terms
+                        </Link>
+                      </span>
+                    </footer>
                   </>
                 </div>
               </Drawer.Content>
@@ -3299,6 +3347,20 @@ export function HohoExperience({
               } else {
                 showToast("Story invite share cancelled", "info");
               }
+            }}
+          />
+          <SupportSheet
+            open={supportOpen}
+            handle={activeHandle}
+            supporter={Boolean(config.supporter)}
+            onClose={() => setSupportOpen(false)}
+            onSupporterUnlocked={() => {
+              setConfig((prev) => {
+                const next = { ...prev, supporter: true };
+                if (activeHandle) saveTreeConfig(activeHandle, next);
+                return next;
+              });
+              showToast("Golden Star Supporter halo unlocked!");
             }}
           />
         </>

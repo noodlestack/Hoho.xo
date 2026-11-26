@@ -443,6 +443,7 @@ export function sanitizeConfigPatch(
       typeof obj.christmasLock === "boolean"
         ? obj.christmasLock
         : base.christmasLock,
+    supporter: Boolean(base.supporter),
   };
 }
 
@@ -811,4 +812,19 @@ export async function claimOwnerPushCoalesceWindow(
   windowMs = 60_000,
 ): Promise<boolean> {
   return getActiveTreeStore().claimPushCoalesceWindow(handle, windowMs);
+}
+
+export async function setTreeSupporter(
+  handle: string,
+  supporter: boolean,
+): Promise<TreeMeta | null> {
+  const clean = parseHandle(handle);
+  if (!clean) return null;
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(clean);
+  if (!existing) return null;
+  return store.updateConfig(clean, {
+    ...existing.config,
+    supporter: Boolean(supporter),
+  });
 }
