@@ -46,15 +46,28 @@ import {
 
 const tempDir = path.join(os.tmpdir(), `hoho-xo-test-${process.pid}`);
 const tempStoreFile = path.join(tempDir, "store.json");
+const LIVE_KV_URL = (
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.KV_REST_API_URL ||
+  ""
+).replace(/\/$/, "");
+const LIVE_KV_TOKEN =
+  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || "";
 
 beforeEach(async () => {
   process.env.HOHO_STORE_FILE = tempStoreFile;
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  delete process.env.KV_REST_API_URL;
+  delete process.env.KV_REST_API_TOKEN;
   resetMemoryStoreForTests();
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
 afterAll(async () => {
   delete process.env.HOHO_STORE_FILE;
+  if (LIVE_KV_URL) process.env.UPSTASH_REDIS_REST_URL = LIVE_KV_URL;
+  if (LIVE_KV_TOKEN) process.env.UPSTASH_REDIS_REST_TOKEN = LIVE_KV_TOKEN;
   resetMemoryStoreForTests();
   await fs.rm(tempDir, { recursive: true, force: true });
 });
@@ -300,10 +313,7 @@ describe("SSR privacy sanitization and robots policy", () => {
   });
 });
 
-const hasKvCredentials = Boolean(
-  (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) &&
-    (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN),
-);
+const hasKvCredentials = Boolean(LIVE_KV_URL && LIVE_KV_TOKEN);
 
 describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", () => {
   it("persists 50 concurrent appendMessage calls with unique 1..50 seq on MemoryTreeStore", async () => {
@@ -378,39 +388,45 @@ describe("Task 1.2 atomic storage adapters, concurrency, cap, and idempotency", 
     "persists 50 concurrent appendMessage calls on live KvTreeStore (skipped without KV creds)",
     async () => {
       const kv = new KvTreeStore(() => ({
-        url: (
-          process.env.UPSTASH_REDIS_REST_URL ||
-          process.env.KV_REST_API_URL ||
-          ""
-        ).replace(/\/$/, ""),
-        token:
-          process.env.UPSTASH_REDIS_REST_TOKEN ||
-          process.env.KV_REST_API_TOKEN ||
-          "",
+        url: LIVE_KV_URL,
+        token: LIVE_KV_TOKEN,
       }));
       const handle = `kvtest_${Date.now().toString(36).slice(-6)}`;
       const now = new Date().toISOString();
-      await kv.createTreeIfAbsent({
-        handle,
-        ownerTokenHash: "hashkv",
-        config: defaultTreeConfig(handle),
-        createdAt: now,
-        updatedAt: now,
-      });
-      const results = await Promise.all(
-        Array.from({ length: 50 }, (_, idx) =>
-          kv.appendMessage(
-            handle,
-            { body: `KV wish #${idx + 1}`, ornamentType: idx % 16 },
-            { cap: 1000 },
+      try {
+        await kv.createTreeIfAbsent({
+          handle,
+          ownerTokenHash: "hashkv",
+          config: defaultTreeConfig(handle),
+          createdAt: now,
+          updatedAt: now,
+        });
+        const results = await Promise.all(
+          Array.from({ length: 50 }, (_, idx) =>
+            kv.appendMessage(
+              handle,
+              { body: `KV wish #${idx + 1}`, ornamentType: idx % 16 },
+              { cap: 1000 },
+            ),
           ),
-        ),
-      );
-      expect(results.every((r) => r.ok)).toBe(true);
-      const list = await kv.listMessages(handle);
-      expect(list.map((m) => m.seq).sort((a, b) => a - b)).toEqual(
-        Array.from({ length: 50 }, (_, i) => i + 1),
-      );
+        );
+        expect(results.every((r) => r.ok)).toBe(true);
+        const list = await kv.listMessages(handle);
+        expect(list.map((m) => m.seq).sort((a, b) => a - b)).toEqual(
+          Array.from({ length: 50 }, (_, i) => i + 1),
+        );
+      } finally {
+        await fetch(`${LIVE_KV_URL}/pipeline`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LIVE_KV_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify([
+            ["DEL", `hoho:v2:tree:${handle}`, `hoho:v2:seq:${handle}`, `hoho:v2:idx:${handle}`, `hoho:v2:msg:${handle}`, `hoho:v2:unread:${handle}`],
+          ]),
+        }).catch(() => {});
+      }
     },
   );
 
@@ -940,11 +956,22 @@ describe("Task 1.5 cookie-only auth and same-origin checks", () => {
 });
 
 describe("Task 1.6 self-harm support notice and crisis resources", () => {
-  it("provides a default guidance entry without unverified region phone numbers", () => {
+  it("provides default and regional verified crisis support entries", () => {
     const def = getDefaultCrisisResource();
     expect(def.label.length).toBeGreaterThan(0);
     expect(def.guidance.toLowerCase()).toContain("emergency");
-    expect(Object.keys(CRISIS_RESOURCES.regions)).toHaveLength(0);
+    expect(def.url?.startsWith("https://")).toBe(true);
+    expect(Object.keys(CRISIS_RESOURCES.regions)).toEqual(
+      expect.arrayContaining(["PH", "US", "GB", "AU"]),
+    );
+    for (const entries of Object.values(CRISIS_RESOURCES.regions)) {
+      expect(entries.length).toBeGreaterThan(0);
+      for (const entry of entries) {
+        expect(entry.label.length).toBeGreaterThan(0);
+        expect(entry.guidance.length).toBeGreaterThan(0);
+        expect(Boolean(entry.tel || entry.url)).toBe(true);
+      }
+    }
   });
 
   it("sets selfHarmNotice=true while still delivering the note to the owner", async () => {
