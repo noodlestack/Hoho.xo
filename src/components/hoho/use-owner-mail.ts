@@ -95,7 +95,7 @@ export function useOwnerMail({
             }
             dropTimerRef.current = window.setTimeout(() => {
               setLatestDroppedId(null);
-            }, 2400);
+            }, 3400);
             if (soundEnabledRef.current) {
               playOrnamentChime("drop");
             }

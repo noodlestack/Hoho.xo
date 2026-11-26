@@ -478,6 +478,15 @@ export function HohoExperience({
         .length,
     [messages],
   );
+  const prevUnreadCountRef = useRef(unreadCount);
+  const [unreadTickSeq, setUnreadTickSeq] = useState(0);
+
+  useEffect(() => {
+    if (unreadCount > prevUnreadCountRef.current) {
+      queueMicrotask(() => setUnreadTickSeq((s) => s + 1));
+    }
+    prevUnreadCountRef.current = unreadCount;
+  }, [unreadCount]);
 
   const newestUnread = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -921,7 +930,7 @@ export function HohoExperience({
         if (dropTimerRef.current) window.clearTimeout(dropTimerRef.current);
         dropTimerRef.current = window.setTimeout(() => {
           setLatestDroppedId(null);
-        }, 2400);
+        }, 3400);
       } catch {
         setSubmitError("Connection error — please try sending again.");
       } finally {
@@ -993,7 +1002,12 @@ export function HohoExperience({
       <Mail size={14} strokeWidth={2} aria-hidden="true" />
       <span>Mail ({messages.length})</span>
       {unreadCount > 0 ? (
-        <span className="unread-pill">{unreadCount} new</span>
+        <span
+          key={unreadTickSeq}
+          className={`unread-pill${unreadTickSeq > 0 ? " is-ticking" : ""}`}
+        >
+          {unreadCount} new
+        </span>
       ) : null}
     </button>
   );

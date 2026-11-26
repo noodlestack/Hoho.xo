@@ -247,6 +247,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     id: null,
     startedAt: 0,
   });
+  const hoveredIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!latestDroppedId || reducedMotion) return;
@@ -1220,31 +1221,62 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         const projected = curOrnaments
           .map((item) => {
             const pos = slotPosition3D(item.slot, TREE_HEIGHT, TREE_BASE_RADIUS);
-            let drawY = pos.y;
-            let dropRingProgress = -1;
+            const proj = project3D(pos.x, pos.y, pos.z);
+            let drawSy = proj.sy;
+            let dropFlashAlpha = 0;
+            let pendulumAngle = 0;
 
-            if (dropAnimRef.current.id === item.id) {
-              const elapsedDrop = (now - dropAnimRef.current.startedAt) / 950;
-              if (elapsedDrop >= 1) {
+            if (!curReduced && dropAnimRef.current.id === item.id) {
+              const elapsedMs = Math.max(0, now - dropAnimRef.current.startedAt);
+              const dropDurMs = 900;
+              const swingDurMs = 2200;
+              if (elapsedMs >= dropDurMs + swingDurMs) {
                 dropAnimRef.current.id = null;
+              } else if (elapsedMs < dropDurMs) {
+                const easedDrop = dampedBounce(elapsedMs / dropDurMs);
+                const startSy = proj.sy - 120;
+                drawSy = startSy + (proj.sy - startSy) * easedDrop;
+                if (elapsedMs > dropDurMs - 90) {
+                  dropFlashAlpha = (elapsedMs - (dropDurMs - 90)) / 90;
+                }
               } else {
-                const easedDrop = dampedBounce(Math.max(0, elapsedDrop));
-                drawY = (TREE_HEIGHT + 1.8) * (1 - easedDrop) + pos.y * easedDrop;
-                dropRingProgress = elapsedDrop;
+                const afterLandMs = elapsedMs - dropDurMs;
+                if (afterLandMs < 90) {
+                  dropFlashAlpha = 1 - afterLandMs / 90;
+                }
+                const swingSec = afterLandMs / 1000;
+                pendulumAngle =
+                  ((7 * Math.PI) / 180) *
+                  Math.exp(-swingSec * 1.45) *
+                  Math.sin(swingSec * Math.PI * 3.1);
               }
             }
 
-            const proj = project3D(pos.x, drawY, pos.z);
-            return { item, dropRingProgress, ...proj };
+            return {
+              item,
+              sx: proj.sx,
+              sy: drawSy,
+              dz: proj.dz,
+              dropFlashAlpha,
+              pendulumAngle,
+            };
           })
           .sort((a, b) => a.dz - b.dz);
 
         for (let i = 0; i < projected.length; i += 1) {
-          const { item, dropRingProgress, sx, sy, dz } = projected[i];
+          const {
+            item,
+            sx,
+            sy,
+            dz,
+            dropFlashAlpha,
+            pendulumAngle,
+          } = projected[i];
           const color =
             ORNAMENT_COLORS[item.colorIdx % ORNAMENT_COLORS.length] ?? "#F5C451";
           const style = ORNAMENT_TYPES[item.ornamentType] ?? ORNAMENT_TYPES[0];
           const isUnread = !item.readAt;
+          const isHovered = hoveredIdRef.current === item.id;
           const depthDim = dz < -0.6 ? 0.78 : 1;
 
           let wiggleOffset = 0;
@@ -1260,72 +1292,107 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
           const ox = sx + wiggleOffset;
           const oy = sy;
+          // ~1.6x foliage cell size so ornaments read as distinct hanging jewels
+          const diskR = isDenseOrnaments
+            ? isCompact
+              ? 10
+              : 11.8
+            : isCompact
+              ? 13.5
+              : 15.5;
 
           ctx.save();
-          ctx.globalAlpha = ornamentAlpha * depthDim * (isUnread ? 1 : 0.82);
+          ctx.globalAlpha = ornamentAlpha * depthDim * (isUnread ? 1 : 0.86);
 
-          // Expanding gold sparkle ring on newly dropped ornament
-          if (dropRingProgress >= 0 && dropRingProgress < 1) {
+          // Rotate around hanger at top edge during Phase 2 damped pendulum
+          ctx.translate(ox, oy - diskR);
+          if (Math.abs(pendulumAngle) > 0.0005) {
+            ctx.rotate(pendulumAngle);
+          }
+          ctx.translate(0, diskR);
+
+          // Short landing flash halo on arrival
+          if (dropFlashAlpha > 0.01) {
             ctx.save();
-            ctx.globalAlpha = (1 - dropRingProgress) * 0.75;
+            ctx.globalAlpha = Math.min(1, dropFlashAlpha) * 0.85;
             ctx.strokeStyle = "#F5C451";
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(ox, oy, 14 + dropRingProgress * 28, 0, Math.PI * 2);
+            ctx.arc(0, 0, diskR + 4 + (1 - dropFlashAlpha) * 18, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
           }
 
-          // Restrained warm halo behind unread ornaments
+          // Wide soft halo behind ornament
           const haloR = isDenseOrnaments
             ? isUnread
-              ? 16
-              : 10
+              ? 20
+              : 14
             : isUnread
-              ? 25
-              : 15;
-          const halo = ctx.createRadialGradient(ox, oy, 2, ox, oy, haloR);
+              ? 30
+              : 21;
+          const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, haloR);
           halo.addColorStop(
             0,
-            isUnread ? "rgba(245, 196, 81, 0.36)" : "rgba(242, 237, 228, 0.14)",
+            isUnread ? "rgba(245, 196, 81, 0.36)" : "rgba(242, 237, 228, 0.16)",
           );
           halo.addColorStop(1, "rgba(11, 13, 18, 0)");
           ctx.fillStyle = halo;
           ctx.beginPath();
-          ctx.arc(ox, oy, haloR, 0, Math.PI * 2);
+          ctx.arc(0, 0, haloR, 0, Math.PI * 2);
           ctx.fill();
 
-          // Dark backing disk for crisp ornament legibility over foliage
-          const diskR = isDenseOrnaments
-            ? isCompact
-              ? 7.2
-              : 9
-            : isCompact
-              ? 10
-              : 12.5;
-          ctx.fillStyle = "rgba(11, 13, 18, 0.8)";
+          // Dark backing disk for crisp legibility over foliage
+          ctx.fillStyle = "rgba(11, 13, 18, 0.88)";
           ctx.beginPath();
-          ctx.arc(ox, oy, diskR, 0, Math.PI * 2);
+          ctx.arc(0, 0, diskR, 0, Math.PI * 2);
           ctx.fill();
 
-          // Outline ring + unread indicator dot
-          ctx.strokeStyle = isUnread ? "#F5C451" : color;
-          ctx.lineWidth = isUnread ? 1.5 : 1;
+          // Outline ring (+ crisp focus/hover halo)
+          ctx.strokeStyle = isHovered ? "#F1EDE4" : isUnread ? "#F5C451" : color;
+          ctx.lineWidth = isHovered ? 2 : isUnread ? 1.6 : 1.1;
           ctx.stroke();
 
+          if (isHovered) {
+            ctx.save();
+            ctx.globalAlpha *= 0.5;
+            ctx.strokeStyle = "#F5C451";
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(0, 0, diskR + 4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Top-left specular bauble dot
+          ctx.save();
+          ctx.globalAlpha *= 0.55;
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.arc(
+            -diskR * 0.38,
+            -diskR * 0.38,
+            Math.max(1.4, diskR * 0.14),
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+          ctx.restore();
+
+          // Saturated ornament glyph
           ctx.fillStyle = color;
           ctx.font = `700 ${
-            isDenseOrnaments ? (isCompact ? 10 : 12) : isCompact ? 13 : 16
+            isDenseOrnaments ? (isCompact ? 11.5 : 13.5) : isCompact ? 15 : 18
           }px "JetBrains Mono", monospace`;
-          ctx.fillText(style.glyph, ox, oy + 0.5);
+          ctx.fillText(style.glyph, 0, 0.5);
 
           if (isUnread) {
             ctx.fillStyle = "#F5C451";
             ctx.beginPath();
             ctx.arc(
-              ox + (isDenseOrnaments ? 6 : isCompact ? 8 : 10),
-              oy - (isDenseOrnaments ? 6 : isCompact ? 8 : 10),
-              isDenseOrnaments ? 2 : 2.5,
+              diskR * 0.72,
+              -diskR * 0.72,
+              isDenseOrnaments ? 2.2 : 2.8,
               0,
               Math.PI * 2,
             );
@@ -1341,7 +1408,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             r: isDenseOrnaments
               ? isCompact
                 ? 22
-                : 18
+                : 19
               : isCompact
                 ? 34
                 : 28,
@@ -1618,6 +1685,13 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             }
             if (event.pointerType === "mouse") {
               const hovered = findOrnamentAt(event.clientX, event.clientY);
+              const nextHoveredId = hovered ? hovered.ornament.id : null;
+              if (hoveredIdRef.current !== nextHoveredId) {
+                hoveredIdRef.current = nextHoveredId;
+                if (reducedMotion) {
+                  drawNowRef.current();
+                }
+              }
               setHoveredInfo(
                 hovered
                   ? {
@@ -1667,6 +1741,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               wasPinchingRef.current = false;
             }
             dragStateRef.current.active = false;
+            if (hoveredIdRef.current !== null) {
+              hoveredIdRef.current = null;
+              if (reducedMotion) drawNowRef.current();
+            }
             setHoveredInfo(null);
           }}
           onPointerCancel={(event) => {
@@ -1678,6 +1756,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               wasPinchingRef.current = false;
             }
             dragStateRef.current.active = false;
+            if (hoveredIdRef.current !== null) {
+              hoveredIdRef.current = null;
+              if (reducedMotion) drawNowRef.current();
+            }
             setHoveredInfo(null);
           }}
         />

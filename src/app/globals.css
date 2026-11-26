@@ -255,6 +255,17 @@ select:focus-visible {
   cursor: pointer;
 }
 
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
 .ornament-tooltip {
   position: absolute;
   z-index: 18;
@@ -272,6 +283,11 @@ select:focus-visible {
   font-weight: 600;
   white-space: nowrap;
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6);
+  animation: tooltip-in 120ms ease-out;
+  transition:
+    left 120ms ease-out,
+    top 120ms ease-out,
+    opacity 120ms ease-out;
 }
 
 .static-tree-fallback {
@@ -539,6 +555,17 @@ select:focus-visible {
   transform: translateY(-1px);
 }
 
+@keyframes unread-roll-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .unread-pill {
   display: inline-flex;
   align-items: center;
@@ -552,6 +579,10 @@ select:focus-visible {
   font-size: 0.68rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.unread-pill.is-ticking {
+  animation: unread-roll-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .audio-pill-btn {
