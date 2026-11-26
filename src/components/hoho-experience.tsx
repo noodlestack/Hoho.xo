@@ -39,11 +39,11 @@ import {
   getKeyboardShortcuts,
   readVisitorDraft,
   writeVisitorDraft,
-  type ClaimApiResponse,
-  type ClaimOutcome,
   type PublicTreeApiResponse,
   type StudioTab,
 } from "@/components/hoho/experience-helpers";
+import { useOwnerMail } from "@/components/hoho/use-owner-mail";
+import { useOwnerSession } from "@/components/hoho/use-owner-session";
 import {
   classifyMessage,
   loadStoredMessages,
@@ -70,7 +70,6 @@ import {
   OWNER_PROMPT_PRESETS,
   parseDesignFromSearchParams,
   parseHandle,
-  saveActiveOwnerHandle,
   saveTreeConfig,
   TREE_AVATARS,
   TREE_SCENERIES,
@@ -105,8 +104,6 @@ interface HohoExperienceProps {
   initialPublicTree?: PublicTreeData;
 }
 
-const inflightClaims = new Map<string, Promise<ClaimOutcome>>();
-
 export function HohoExperience({
   mode,
   initialHandle,
@@ -118,7 +115,6 @@ export function HohoExperience({
     !isOwnerMode && initialPublicTree ? initialPublicTree : null;
 
   const [activeHandle, setActiveHandle] = useState<string>(initialSafeHandle);
-  const [handleDraft, setHandleDraft] = useState<string>(initialSafeHandle);
   const [config, setConfig] = useState<TreeConfig>(() =>
     initialVisitorTree ? initialVisitorTree.config : defaultTreeConfig(initialSafeHandle),
   );
@@ -147,9 +143,6 @@ export function HohoExperience({
   const [serverSynced, setServerSynced] = useState<boolean>(() =>
     Boolean(initialVisitorTree),
   );
-  const [ownerKey, setOwnerKey] = useState<string>("");
-  const [unlockDraft, setUnlockDraft] = useState<string>("");
-  const [ownerClaimError, setOwnerClaimError] = useState<string>("");
 
   const [mailOpen, setMailOpen] = useState<boolean>(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
@@ -180,30 +173,12 @@ export function HohoExperience({
   const activeHandleRef = useRef<string>(initialSafeHandle);
   const serverSyncedRef = useRef<boolean>(Boolean(initialVisitorTree));
   const soundEnabledRef = useRef<boolean>(true);
-  const knownMessageIdsRef = useRef<Set<string>>(new Set());
-  const mailSeededRef = useRef<boolean>(false);
-  const lastMailSummaryRef = useRef<{
-    unreadCount: number;
-    latestSeq: number;
-  } | null>(null);
 
   useEffect(() => {
     activeHandleRef.current = activeHandle;
     serverSyncedRef.current = serverSynced;
     soundEnabledRef.current = soundEnabled;
   }, [activeHandle, serverSynced, soundEnabled]);
-
-  const seedKnownMessages = useCallback((list: TreeMessage[]) => {
-    knownMessageIdsRef.current = new Set(list.map((m) => m.id));
-    mailSeededRef.current = true;
-    let unreadCount = 0;
-    let latestSeq = 0;
-    for (const m of list) {
-      if (m.seq > latestSeq) latestSeq = m.seq;
-      if (m.status === "visible" && m.readAt === null) unreadCount += 1;
-    }
-    lastMailSummaryRef.current = { unreadCount, latestSeq };
-  }, []);
 
   const showToast = useCallback(
     (
@@ -221,140 +196,43 @@ export function HohoExperience({
     [],
   );
 
-  const refreshOwnerMail = useCallback(
-    async (targetHandle: string) => {
-      if (!isOwnerMode || !parseHandle(targetHandle)) return;
-      try {
-        const res = await fetch(
-          `/api/trees/${encodeURIComponent(targetHandle)}/mail`,
-          {
-            cache: "no-store",
-            credentials: "same-origin",
-          },
-        );
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          ok?: boolean;
-          messages?: TreeMessage[];
-        };
-        if (data.ok && Array.isArray(data.messages)) {
-          const isSameHandle = targetHandle === activeHandleRef.current;
-          const prevKnown = knownMessageIdsRef.current;
-          const newlyArrived =
-            mailSeededRef.current && isSameHandle
-              ? data.messages.filter(
-                  (m) => m.status === "visible" && !prevKnown.has(m.id),
-                )
-              : [];
+  const { seedKnownMessages, resetMailTracking, refreshOwnerMail } =
+    useOwnerMail({
+      isOwnerMode,
+      serverSynced,
+      activeHandleRef,
+      serverSyncedRef,
+      soundEnabledRef,
+      dropTimerRef,
+      setMessages,
+      setLatestDroppedId,
+      showToast,
+    });
 
-          seedKnownMessages(data.messages);
-          setMessages(data.messages);
-          saveStoredMessages(data.messages, targetHandle);
-
-          if (newlyArrived.length > 0) {
-            const latest = newlyArrived[newlyArrived.length - 1];
-            setLatestDroppedId(latest.id);
-            if (dropTimerRef.current) {
-              window.clearTimeout(dropTimerRef.current);
-            }
-            dropTimerRef.current = window.setTimeout(() => {
-              setLatestDroppedId(null);
-            }, 2400);
-            if (soundEnabledRef.current) {
-              playOrnamentChime("drop");
-            }
-            showToast(
-              newlyArrived.length === 1
-                ? "New anonymous ornament arrived!"
-                : `${newlyArrived.length} new anonymous ornaments arrived!`,
-            );
-          }
-        }
-      } catch {
-        // Offline/transient error ignored cleanly
-      }
-    },
-    [isOwnerMode, seedKnownMessages, showToast],
-  );
-
-  const claimOrSyncOwner = useCallback(
-    async (
-      targetHandle: string,
-      explicitKey?: string,
-      seedConfig?: TreeConfig,
-    ): Promise<boolean> => {
-      if (!isOwnerMode || !parseHandle(targetHandle)) return false;
-      const providedKey = explicitKey?.trim() ?? "";
-      const dedupeKey = `${targetHandle}:${providedKey || "cookie"}`;
-
-      try {
-        let pending = inflightClaims.get(dedupeKey);
-        if (!pending) {
-          pending = (async () => {
-            const res = await fetch("/api/trees", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                handle: targetHandle,
-                ...(providedKey ? { ownerKey: providedKey } : {}),
-                ...(seedConfig ? { config: seedConfig } : {}),
-              }),
-            });
-            const data = (await res
-              .json()
-              .catch(() => ({}))) as ClaimApiResponse;
-            return { status: res.status, data, usedKey: providedKey };
-          })().finally(() => {
-            inflightClaims.delete(dedupeKey);
-          });
-          inflightClaims.set(dedupeKey, pending);
-        }
-
-        const { status, data } = await pending;
-        if (status === 409) {
-          setServerSynced(false);
-          setOwnerKey("");
-          setOwnerClaimError(
-            data.error ??
-              `@${targetHandle} is claimed on another device. Enter its Owner Key or choose a new handle.`,
-          );
-          return false;
-        }
-
-        if (status < 200 || status >= 300 || !data.ok) {
-          setServerSynced(false);
-          return false;
-        }
-
-        if (data.created && data.ownerKey) {
-          setOwnerKey(data.ownerKey);
-        } else {
-          setOwnerKey("");
-        }
-
-        setOwnerClaimError("");
-        setServerSynced(true);
-
-        if (data.config) {
-          setConfig(data.config);
-          saveTreeConfig(targetHandle, data.config);
-        }
-        if (Array.isArray(data.messages)) {
-          seedKnownMessages(data.messages);
-          setMessages(data.messages);
-          saveStoredMessages(data.messages, targetHandle);
-        }
-        return true;
-      } catch {
-        setServerSynced(false);
-        return false;
-      }
-    },
-    [isOwnerMode, seedKnownMessages],
-  );
+  const {
+    handleDraft,
+    setHandleDraft,
+    ownerKey,
+    setOwnerKey,
+    unlockDraft,
+    setUnlockDraft,
+    ownerClaimError,
+    claimOrSyncOwner,
+    commitHandleChange,
+    handleUnlockWithKey,
+  } = useOwnerSession({
+    isOwnerMode,
+    initialSafeHandle,
+    activeHandle,
+    setActiveHandle,
+    config,
+    setConfig,
+    setMessages,
+    setServerSynced,
+    seedKnownMessages,
+    resetMailTracking,
+    showToast,
+  });
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -475,6 +353,8 @@ export function HohoExperience({
     initialPublicTree,
     isOwnerMode,
     seedKnownMessages,
+    setHandleDraft,
+    setOwnerKey,
   ]);
 
   useEffect(() => {
@@ -518,67 +398,6 @@ export function HohoExperience({
       window.removeEventListener("keydown", onKey);
     };
   }, [shortcutsOpen]);
-
-  useEffect(() => {
-    const onFocus = () => {
-      if (isOwnerMode && serverSyncedRef.current) {
-        void refreshOwnerMail(activeHandleRef.current);
-      }
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [isOwnerMode, refreshOwnerMail]);
-
-  const pollOwnerMailSummary = useCallback(
-    async (targetHandle: string) => {
-      if (!isOwnerMode || !parseHandle(targetHandle)) return;
-      try {
-        const res = await fetch(
-          `/api/trees/${encodeURIComponent(targetHandle)}/mail?summary=1`,
-          {
-            cache: "no-store",
-            credentials: "same-origin",
-          },
-        );
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          ok?: boolean;
-          unreadCount?: number;
-          latestSeq?: number;
-        };
-        if (
-          data.ok &&
-          typeof data.unreadCount === "number" &&
-          typeof data.latestSeq === "number"
-        ) {
-          const prev = lastMailSummaryRef.current;
-          if (
-            !prev ||
-            prev.unreadCount !== data.unreadCount ||
-            prev.latestSeq !== data.latestSeq
-          ) {
-            await refreshOwnerMail(targetHandle);
-          }
-        }
-      } catch {
-        // Offline/transient error ignored cleanly
-      }
-    },
-    [isOwnerMode, refreshOwnerMail],
-  );
-
-  useEffect(() => {
-    if (!isOwnerMode || !serverSynced) return;
-    const intervalId = window.setInterval(() => {
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible"
-      ) {
-        void pollOwnerMailSummary(activeHandleRef.current);
-      }
-    }, 12_000);
-    return () => window.clearInterval(intervalId);
-  }, [isOwnerMode, serverSynced, pollOwnerMailSummary]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -650,64 +469,6 @@ export function HohoExperience({
       });
     },
     [activeHandle, isOwnerMode, scheduleServerConfigSync],
-  );
-
-  const commitHandleChange = useCallback(
-    async (rawValue: string) => {
-      if (!isOwnerMode) return;
-      const nextHandle = parseHandle(rawValue);
-      if (!nextHandle) {
-        showToast(
-          "Handles use 3–20 letters, numbers, or underscores.",
-          "error",
-        );
-        return;
-      }
-      setHandleDraft(nextHandle);
-      if (nextHandle === activeHandle) return;
-
-      const localFallbackCfg: TreeConfig = { ...config, handle: nextHandle };
-      mailSeededRef.current = false;
-      lastMailSummaryRef.current = null;
-      saveActiveOwnerHandle(nextHandle);
-      saveTreeConfig(nextHandle, localFallbackCfg);
-      setActiveHandle(nextHandle);
-      setConfig(localFallbackCfg);
-      setOwnerKey("");
-
-      const ok = await claimOrSyncOwner(
-        nextHandle,
-        undefined,
-        localFallbackCfg,
-      );
-      if (ok) {
-        showToast(`Active handle set to @${nextHandle}`);
-      } else {
-        showToast(`@${nextHandle} requires its Owner Access Key`);
-      }
-    },
-    [activeHandle, claimOrSyncOwner, config, isOwnerMode, showToast],
-  );
-
-  const handleUnlockWithKey = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
-      const targetHandle = parseHandle(activeHandle) ?? parseHandle(handleDraft);
-      if (!targetHandle) {
-        showToast("Enter a valid handle first.", "error");
-        return;
-      }
-      const cleanedKey = unlockDraft.trim();
-      if (!cleanedKey) return;
-      const ok = await claimOrSyncOwner(targetHandle, cleanedKey);
-      if (ok) {
-        setUnlockDraft("");
-        showToast(`Unlocked @${targetHandle} Mail & settings`);
-      } else {
-        showToast("Invalid Owner Access Key for this handle", "error");
-      }
-    },
-    [activeHandle, claimOrSyncOwner, handleDraft, showToast, unlockDraft],
   );
 
   const theme = TREE_THEMES[config.themeId] ?? TREE_THEMES.fairy;
