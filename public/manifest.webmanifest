@@ -1,0 +1,16 @@
+{
+  "name": "Hoho.xo",
+  "short_name": "Hoho.xo",
+  "description": "Share a 3D ASCII Christmas tree and receive anonymous ornament notes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0D12",
+  "theme_color": "#0B0D12",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
