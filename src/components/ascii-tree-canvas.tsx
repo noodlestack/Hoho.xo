@@ -80,6 +80,7 @@ interface AsciiTreeCanvasProps {
   ornaments: ResolvedOrnament[];
   latestDroppedId: string | null;
   reducedMotion: boolean;
+  staticMode?: boolean;
   isOwnerMode: boolean;
   onSelectOrnament: (ornament: ResolvedOrnament) => void;
   onToggleQrView: () => void;
@@ -173,6 +174,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   ornaments,
   latestDroppedId,
   reducedMotion,
+  staticMode = false,
   isOwnerMode,
   onSelectOrnament,
   onToggleQrView,
@@ -183,10 +185,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     themeId: string;
     canvas: HTMLCanvasElement;
   } | null>(null);
-  const [isCompactViewport, setIsCompactViewport] = useState(false);
-  const internalZoomRef = useRef<number>(
-    Math.max(0.72, Math.min(1.45, zoom)),
-  );
+  const [isCompactViewport, setIsCompactViewport] = useState(true);
+  const internalZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const renderZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const onZoomChangeRef = useRef(onZoomChange);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
@@ -229,8 +229,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   // Smooth transition state between views (tree, top, qr)
   const animStateRef = useRef({
     qrMix: viewMode === "qr" ? 1 : 0,
-    elev:
-      viewMode === "qr" ? Math.PI / 2 : viewMode === "top" ? 1.38 : 0.22,
+    elev: viewMode === "qr" ? Math.PI / 2 : viewMode === "top" ? 1.38 : 0.22,
     fromQrMix: viewMode === "qr" ? 1 : 0,
     fromElev:
       viewMode === "qr" ? Math.PI / 2 : viewMode === "top" ? 1.38 : 0.22,
@@ -260,9 +259,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     starScale: reducedMotion ? 1 : 0,
   });
 
+  const effectiveReduced = reducedMotion || staticMode;
+
   useEffect(() => {
     const grow = growStateRef.current;
-    if (reducedMotion) {
+    if (effectiveReduced) {
       grow.foliage = 1;
       grow.garland = 1;
       grow.lights = 1;
@@ -296,7 +297,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       window.removeEventListener("keydown", skip);
       tl.kill();
     };
-  }, [reducedMotion]);
+  }, [effectiveReduced]);
 
   useEffect(() => {
     if (!latestDroppedId || reducedMotion) return;
@@ -374,6 +375,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     showOrnaments,
     ornaments,
     reducedMotion,
+    staticMode,
     isOwnerMode,
   });
 
@@ -396,6 +398,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       showOrnaments,
       ornaments,
       reducedMotion,
+      staticMode,
       isOwnerMode,
     };
 
@@ -412,7 +415,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       st.fromElev = st.elev;
       st.targetQrMix = nextQrMix;
       st.targetElev = nextElev;
-      if (reducedMotion) {
+      if (reducedMotion || staticMode) {
         st.qrMix = nextQrMix;
         st.elev = nextElev;
         st.inTransition = false;
@@ -422,7 +425,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       }
     }
 
-    if (reducedMotion) {
+    if (reducedMotion || staticMode) {
       drawNowRef.current();
     } else {
       ensureLoopRef.current();
@@ -442,6 +445,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     showOrnaments,
     ornaments,
     reducedMotion,
+    staticMode,
     isOwnerMode,
     onZoomChange,
   ]);
@@ -461,10 +465,6 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     let inViewport = true;
 
     const drawFrame = (now: number) => {
-      const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
-      lastTime = now;
-      const tSec = now * 0.001;
-
       const {
         handle: curHandle,
         matrix: curMatrix,
@@ -477,20 +477,35 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         showGarland: curShowGarland,
         showOrnaments: curShowOrnaments,
         ornaments: curOrnaments,
-        reducedMotion: curReduced,
+        reducedMotion: curReducedRaw,
+        staticMode: curStatic,
       } = propsRef.current;
+
+      const curReduced = curReducedRaw || Boolean(curStatic);
+      const effectiveNow = curStatic ? 12000 : now;
+      const dt = curStatic
+        ? 0
+        : Math.min(0.05, Math.max(0, (effectiveNow - lastTime) / 1000));
+      lastTime = effectiveNow;
+      const tSec = effectiveNow * 0.001;
+      if (curStatic) {
+        yawRef.current = 0.25;
+      }
 
       // Update view transition (radial QR morph wave <= 1.2s total)
       const st = animStateRef.current;
       const isQrMorph = Math.abs(st.targetQrMix - st.fromQrMix) > 0.01;
       const transitionDurMs = isQrMorph ? 1150 : 680;
       const qrElapsedSec = st.inTransition
-        ? Math.min(1.15, Math.max(0, (now - st.transitionStart) / 1000))
+        ? Math.min(
+            1.15,
+            Math.max(0, (effectiveNow - st.transitionStart) / 1000),
+          )
         : st.qrMix >= 0.5
           ? 1.15
           : 0;
       if (st.inTransition) {
-        const elapsed = (now - st.transitionStart) / transitionDurMs;
+        const elapsed = (effectiveNow - st.transitionStart) / transitionDurMs;
         if (elapsed >= 1) {
           st.qrMix = st.targetQrMix;
           st.elev = st.targetElev;
@@ -566,7 +581,12 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.globalAlpha = 0.24 * sceneryFade;
           const wave1Y =
             cssH * 0.19 + (curReduced ? 0 : Math.sin(tSec * 0.45) * 14);
-          const grad1 = ctx.createLinearGradient(0, wave1Y - 90, 0, wave1Y + 130);
+          const grad1 = ctx.createLinearGradient(
+            0,
+            wave1Y - 90,
+            0,
+            wave1Y + 130,
+          );
           grad1.addColorStop(0, "rgba(76, 232, 192, 0)");
           grad1.addColorStop(0.45, "rgba(76, 232, 192, 0.42)");
           grad1.addColorStop(0.75, "rgba(179, 136, 255, 0.28)");
@@ -574,7 +594,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.fillStyle = grad1;
           ctx.beginPath();
           ctx.moveTo(0, wave1Y + 90);
-          for (let x = 0; x <= freeWidth + 40; x += Math.max(40, freeWidth / 6)) {
+          for (
+            let x = 0;
+            x <= freeWidth + 40;
+            x += Math.max(40, freeWidth / 6)
+          ) {
             const dy =
               Math.sin(x * 0.008 + (curReduced ? 0 : tSec * 0.7)) * 28 +
               Math.cos(x * 0.004 - (curReduced ? 0 : tSec * 0.4)) * 18;
@@ -657,7 +681,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ? 0.78
           : 0.42 + 0.58 * Math.sin(tSec * 1.55 + star.phase);
         const starBoost = curScenery === "starlight" ? 1.35 : 1;
-        ctx.globalAlpha = Math.min(0.85, star.alpha * twinkle * bgAlphaScale * starBoost);
+        ctx.globalAlpha = Math.min(
+          0.85,
+          star.alpha * twinkle * bgAlphaScale * starBoost,
+        );
         ctx.fillStyle = curScenery === "starlight" ? "#D6E8FF" : "#9A968D";
         ctx.fillText(star.glyph, star.x * cssW, star.y * cssH);
       }
@@ -704,19 +731,19 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               const fy = curReduced
                 ? flake.y
                 : (flake.y + tSec * flake.speed * speedMult) % 1;
-              const windDrift = isBlizzard && !curReduced ? windDriftBase + flake.phase : 0;
+              const windDrift =
+                isBlizzard && !curReduced ? windDriftBase + flake.phase : 0;
               const fx = curReduced
                 ? flake.x
-                : ((flake.x +
+                : (((flake.x +
                     windDrift +
                     Math.sin(tSec * flake.swayFreq + flake.phase) *
                       flake.swayAmp) %
-                    1 +
+                    1) +
                     1) %
                   1;
               ctx.globalAlpha = flake.alpha * sceneryFade * alphaBoost;
-              const glyph =
-                isBlizzard && layer === "near" ? "/" : flake.glyph;
+              const glyph = isBlizzard && layer === "near" ? "/" : flake.glyph;
               ctx.fillText(glyph, fx * cssW, fy * cssH);
             }
           }
@@ -730,10 +757,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       const cosX = Math.cos(st.elev);
       const sinX = Math.sin(st.elev);
 
-      const availableH = Math.max(
-        180,
-        cssH * (isCompact ? 0.62 : 0.72),
-      );
+      const availableH = Math.max(180, cssH * (isCompact ? 0.62 : 0.72));
       const availableW = freeWidth * (isCompact ? 0.92 : 0.88);
       const treeScale = Math.min(availableH / 9.8, availableW / 7.2);
       const topScale = Math.min(availableH, availableW) / 7.4;
@@ -821,13 +845,16 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       const glyphAlpha = Math.max(0, 1 - st.qrMix * 1.15);
       const ramp = curTheme.glyphRamp;
       const swirlPeak = Math.sin(st.qrMix * Math.PI) * 0.52;
-      const lightYaw = curReduced
-        ? -0.58
-        : -0.58 + tSec * ((Math.PI * 2) / 24);
+      const lightYaw = curReduced ? -0.58 : -0.58 + tSec * ((Math.PI * 2) / 24);
       const lightDirX = Math.sin(lightYaw);
       const lightDirZ = Math.cos(lightYaw);
       const windWave = curReduced ? 0 : Math.sin(tSec * 0.7) * (1 - st.qrMix);
-      const brightLightHalos: Array<{ x: number; y: number; color: string; alpha: number }> = [];
+      const brightLightHalos: Array<{
+        x: number;
+        y: number;
+        color: string;
+        alpha: number;
+      }> = [];
       let lightPassCount = 0;
       const maxSparseLights = Math.floor(curCloud.length * 0.07);
 
@@ -845,10 +872,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           let ptQrMix = st.qrMix;
           if (useRadialWave) {
             const normRad = Math.min(1, Math.max(0, pt.qrRadius / 1.414));
-            const delay = morphingToQr
-              ? normRad * 0.45
-              : (1 - normRad) * 0.45;
-            const localT = Math.max(0, Math.min(1, (qrElapsedSec - delay) / 0.7));
+            const delay = morphingToQr ? normRad * 0.45 : (1 - normRad) * 0.45;
+            const localT = Math.max(
+              0,
+              Math.min(1, (qrElapsedSec - delay) / 0.7),
+            );
             const easedLocal = quadEaseInOut(localT);
             ptQrMix = morphingToQr
               ? st.fromQrMix + (st.targetQrMix - st.fromQrMix) * easedLocal
@@ -860,9 +888,9 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               ? 0
               : Math.pow(Math.max(0, pt.y), 1.5) * 0.008 * windWave;
           let px =
-            (pt.x + swayX) * (1 - ptQrMix) + pt.qrX * TREE_BASE_RADIUS * ptQrMix;
-          let pz =
-            pt.z * (1 - ptQrMix) + pt.qrZ * TREE_BASE_RADIUS * ptQrMix;
+            (pt.x + swayX) * (1 - ptQrMix) +
+            pt.qrX * TREE_BASE_RADIUS * ptQrMix;
+          let pz = pt.z * (1 - ptQrMix) + pt.qrZ * TREE_BASE_RADIUS * ptQrMix;
           const py = pt.y * (1 - ptQrMix);
 
           if (swirlPeak > 0.01) {
@@ -877,7 +905,9 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
           if (pt.kind === "ground") {
             const distSq = pt.x * pt.x + pt.z * pt.z;
-            const ringBand = Math.floor(Math.sqrt(distSq) / (TREE_BASE_RADIUS * 0.72));
+            const ringBand = Math.floor(
+              Math.sqrt(distSq) / (TREE_BASE_RADIUS * 0.72),
+            );
             if (ringBand > 2 || pt.glyphIdx % 4 !== 0) continue;
           }
 
@@ -986,8 +1016,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               tierFactor *
               1.03;
             const theta = frac * Math.PI * 2 * 3.5;
-            const swayX =
-              Math.pow(Math.max(0, y), 1.5) * 0.008 * windWave;
+            const swayX = Math.pow(Math.max(0, y), 1.5) * 0.008 * windWave;
             const gx = Math.cos(theta) * maxR + swayX;
             const gz = Math.sin(theta) * maxR;
             const { sx, sy, dz } = project3D(
@@ -1035,179 +1064,165 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           const row = Math.floor(idx / cols);
           ctx.globalAlpha = alphaBuf[idx];
           ctx.fillStyle = colorBuf[idx];
-          ctx.fillText(
-            glyphBuf[idx],
-            (col + 0.5) * cellW,
-            (row + 0.5) * cellH,
-          );
+          ctx.fillText(glyphBuf[idx], (col + 0.5) * cellW, (row + 0.5) * cellH);
         }
         ctx.globalAlpha = 1;
 
         // 4. Analytically rendered Editable Apex Topper (sways minimally)
         if (grow.starScale > 0.02) {
-          const apexSwayX =
-            Math.pow(TREE_HEIGHT, 1.5) * 0.002 * windWave;
+          const apexSwayX = Math.pow(TREE_HEIGHT, 1.5) * 0.002 * windWave;
           const apex = project3D(apexSwayX, TREE_HEIGHT + 0.42, 0);
-          const starGlow = curReduced
-            ? 1
-            : 0.82 + 0.18 * Math.sin(tSec * 2.2);
+          const starGlow = curReduced ? 1 : 0.82 + 0.18 * Math.sin(tSec * 2.2);
           const starRadiusPx = Math.max(15, activeScale * 0.5);
 
           ctx.save();
           ctx.translate(apex.sx, apex.sy);
           ctx.scale(grow.starScale, grow.starScale);
           ctx.translate(-apex.sx, -apex.sy);
-          ctx.globalAlpha =
-            starGlow * glyphAlpha * Math.min(1, grow.starScale);
-        const haloRgba =
-          curTopper === "heart"
-            ? "rgba(255, 143, 177, 0.36)"
-            : curTopper === "snowflake"
-              ? "rgba(143, 211, 255, 0.36)"
-              : "rgba(245, 196, 81, 0.38)";
-        const haloFade =
-          curTopper === "heart"
-            ? "rgba(255, 143, 177, 0)"
-            : curTopper === "snowflake"
-              ? "rgba(143, 211, 255, 0)"
-              : "rgba(245, 196, 81, 0)";
-        const starGrad = ctx.createRadialGradient(
-          apex.sx,
-          apex.sy,
-          1,
-          apex.sx,
-          apex.sy,
-          starRadiusPx * 2.7,
-        );
-        starGrad.addColorStop(0, haloRgba);
-        starGrad.addColorStop(1, haloFade);
-        ctx.fillStyle = starGrad;
-        ctx.beginPath();
-        ctx.arc(apex.sx, apex.sy, starRadiusPx * 2.7, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.globalAlpha = starGlow * glyphAlpha * Math.min(1, grow.starScale);
+          const haloRgba =
+            curTopper === "heart"
+              ? "rgba(255, 143, 177, 0.36)"
+              : curTopper === "snowflake"
+                ? "rgba(143, 211, 255, 0.36)"
+                : "rgba(245, 196, 81, 0.38)";
+          const haloFade =
+            curTopper === "heart"
+              ? "rgba(255, 143, 177, 0)"
+              : curTopper === "snowflake"
+                ? "rgba(143, 211, 255, 0)"
+                : "rgba(245, 196, 81, 0)";
+          const starGrad = ctx.createRadialGradient(
+            apex.sx,
+            apex.sy,
+            1,
+            apex.sx,
+            apex.sy,
+            starRadiusPx * 2.7,
+          );
+          starGrad.addColorStop(0, haloRgba);
+          starGrad.addColorStop(1, haloFade);
+          ctx.fillStyle = starGrad;
+          ctx.beginPath();
+          ctx.arc(apex.sx, apex.sy, starRadiusPx * 2.7, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.fillStyle =
-          curTopper === "heart"
-            ? "#FF8FB1"
-            : curTopper === "snowflake"
-              ? "#8FD3FF"
-              : curTheme.star;
-        ctx.font = `700 ${Math.max(8.5, fontSize - 1)}px "JetBrains Mono", monospace`;
-        const step = Math.max(6.5, cellW * 1.15);
+          ctx.fillStyle =
+            curTopper === "heart"
+              ? "#FF8FB1"
+              : curTopper === "snowflake"
+                ? "#8FD3FF"
+                : curTheme.star;
+          ctx.font = `700 ${Math.max(8.5, fontSize - 1)}px "JetBrains Mono", monospace`;
+          const step = Math.max(6.5, cellW * 1.15);
 
-        if (curTopper === "diamond") {
-          for (let dy = -2; dy <= 2; dy += 1) {
-            for (let dx = -2; dx <= 2; dx += 1) {
-              const manhattan = Math.abs(dx) * 1.15 + Math.abs(dy) * 0.85;
-              if (manhattan <= 2.15) {
-                const g = manhattan < 0.8 ? "@" : dx === 0 || dy === 0 ? "+" : "*";
-                ctx.fillText(g, apex.sx + dx * step, apex.sy + dy * step * 1.1);
+          if (curTopper === "diamond") {
+            for (let dy = -2; dy <= 2; dy += 1) {
+              for (let dx = -2; dx <= 2; dx += 1) {
+                const manhattan = Math.abs(dx) * 1.15 + Math.abs(dy) * 0.85;
+                if (manhattan <= 2.15) {
+                  const g =
+                    manhattan < 0.8 ? "@" : dx === 0 || dy === 0 ? "+" : "*";
+                  ctx.fillText(
+                    g,
+                    apex.sx + dx * step,
+                    apex.sy + dy * step * 1.1,
+                  );
+                }
+              }
+            }
+          } else if (curTopper === "snowflake") {
+            for (let dy = -2; dy <= 2; dy += 1) {
+              for (let dx = -2; dx <= 2; dx += 1) {
+                const onAxis =
+                  dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+                if (onAxis && Math.hypot(dx, dy) <= 2.9) {
+                  const g =
+                    dx === 0 && dy === 0
+                      ? "*"
+                      : dx === 0
+                        ? "|"
+                        : dy === 0
+                          ? "-"
+                          : dx === dy
+                            ? "\\"
+                            : "/";
+                  ctx.fillText(
+                    g,
+                    apex.sx + dx * step,
+                    apex.sy + dy * step * 1.1,
+                  );
+                }
+              }
+            }
+          } else if (curTopper === "heart") {
+            const heartGrid = ["oo oo", "@@@@@", "#####", " *** ", "  v  "];
+            for (let r = 0; r < heartGrid.length; r += 1) {
+              for (let c = 0; c < heartGrid[r].length; c += 1) {
+                const ch = heartGrid[r][c];
+                if (ch === " ") continue;
+                ctx.fillText(
+                  ch,
+                  apex.sx + (c - 2) * step,
+                  apex.sy + (r - 2) * step * 1.1,
+                );
+              }
+            }
+          } else if (curTopper === "crown") {
+            const crownGrid = ["^ * ^", "|#|#|", "@@@@@", "====="];
+            for (let r = 0; r < crownGrid.length; r += 1) {
+              for (let c = 0; c < crownGrid[r].length; c += 1) {
+                const ch = crownGrid[r][c];
+                if (ch === " ") continue;
+                ctx.fillText(
+                  ch,
+                  apex.sx + (c - 2) * step,
+                  apex.sy + (r - 1.5) * step * 1.1,
+                );
+              }
+            }
+          } else if (curTopper === "ribbon") {
+            ctx.fillStyle = "#FF8FB1";
+            const ribbonGrid = ["~~ ~~", ">>@<<", " / \\ ", "/   \\"];
+            for (let r = 0; r < ribbonGrid.length; r += 1) {
+              for (let c = 0; c < ribbonGrid[r].length; c += 1) {
+                const ch = ribbonGrid[r][c];
+                if (ch === " ") continue;
+                ctx.fillText(
+                  ch,
+                  apex.sx + (c - 2) * step,
+                  apex.sy + (r - 1.5) * step * 1.1,
+                );
+              }
+            }
+          } else {
+            // Multi-line dense golden xmasqr-style ASCII star apex
+            const starGrid = [
+              "##",
+              "%%%%",
+              "*##%%%@@@@%%%##",
+              "%%%%@@@@@@%%%%#",
+              "%@@@@@@%",
+              "%%%%@%%%%",
+              "###%#%@#%",
+            ];
+            const starStepX = Math.max(4.6, cellW * 0.86);
+            const starStepY = Math.max(6.8, fontSize * 0.74);
+            for (let r = 0; r < starGrid.length; r += 1) {
+              const line = starGrid[r];
+              const halfLen = (line.length - 1) / 2;
+              for (let c = 0; c < line.length; c += 1) {
+                const ch = line[c];
+                if (ch === " ") continue;
+                ctx.fillText(
+                  ch,
+                  apex.sx + (c - halfLen) * starStepX,
+                  apex.sy + (r - 3.6) * starStepY,
+                );
               }
             }
           }
-        } else if (curTopper === "snowflake") {
-          for (let dy = -2; dy <= 2; dy += 1) {
-            for (let dx = -2; dx <= 2; dx += 1) {
-              const onAxis = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
-              if (onAxis && Math.hypot(dx, dy) <= 2.9) {
-                const g =
-                  dx === 0 && dy === 0
-                    ? "*"
-                    : dx === 0
-                      ? "|"
-                      : dy === 0
-                        ? "-"
-                        : dx === dy
-                          ? "\\"
-                          : "/";
-                ctx.fillText(g, apex.sx + dx * step, apex.sy + dy * step * 1.1);
-              }
-            }
-          }
-        } else if (curTopper === "heart") {
-          const heartGrid = [
-            "oo oo",
-            "@@@@@",
-            "#####",
-            " *** ",
-            "  v  ",
-          ];
-          for (let r = 0; r < heartGrid.length; r += 1) {
-            for (let c = 0; c < heartGrid[r].length; c += 1) {
-              const ch = heartGrid[r][c];
-              if (ch === " ") continue;
-              ctx.fillText(
-                ch,
-                apex.sx + (c - 2) * step,
-                apex.sy + (r - 2) * step * 1.1,
-              );
-            }
-          }
-        } else if (curTopper === "crown") {
-          const crownGrid = [
-            "^ * ^",
-            "|#|#|",
-            "@@@@@",
-            "=====",
-          ];
-          for (let r = 0; r < crownGrid.length; r += 1) {
-            for (let c = 0; c < crownGrid[r].length; c += 1) {
-              const ch = crownGrid[r][c];
-              if (ch === " ") continue;
-              ctx.fillText(
-                ch,
-                apex.sx + (c - 2) * step,
-                apex.sy + (r - 1.5) * step * 1.1,
-              );
-            }
-          }
-        } else if (curTopper === "ribbon") {
-          ctx.fillStyle = "#FF8FB1";
-          const ribbonGrid = [
-            "~~ ~~",
-            ">>@<<",
-            " / \\ ",
-            "/   \\",
-          ];
-          for (let r = 0; r < ribbonGrid.length; r += 1) {
-            for (let c = 0; c < ribbonGrid[r].length; c += 1) {
-              const ch = ribbonGrid[r][c];
-              if (ch === " ") continue;
-              ctx.fillText(
-                ch,
-                apex.sx + (c - 2) * step,
-                apex.sy + (r - 1.5) * step * 1.1,
-              );
-            }
-          }
-        } else {
-          // Multi-line dense golden xmasqr-style ASCII star apex
-          const starGrid = [
-            "##",
-            "%%%%",
-            "*##%%%@@@@%%%##",
-            "%%%%@@@@@@%%%%#",
-            "%@@@@@@%",
-            "%%%%@%%%%",
-            "###%#%@#%",
-          ];
-          const starStepX = Math.max(4.6, cellW * 0.86);
-          const starStepY = Math.max(6.8, fontSize * 0.74);
-          for (let r = 0; r < starGrid.length; r += 1) {
-            const line = starGrid[r];
-            const halfLen = (line.length - 1) / 2;
-            for (let c = 0; c < line.length; c += 1) {
-              const ch = line[c];
-              if (ch === " ") continue;
-              ctx.fillText(
-                ch,
-                apex.sx + (c - halfLen) * starStepX,
-                apex.sy + (r - 3.6) * starStepY,
-              );
-            }
-          }
-        }
-        ctx.restore();
+          ctx.restore();
         }
       }
 
@@ -1249,7 +1264,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             const delay = morphingToQrPlate
               ? normDist * 0.45
               : (1 - normDist) * 0.45;
-            const localT = Math.max(0, Math.min(1, (qrElapsedSec - delay) / 0.7));
+            const localT = Math.max(
+              0,
+              Math.min(1, (qrElapsedSec - delay) / 0.7),
+            );
             const waveMix = quadEaseInOut(localT);
             cellReveal = morphingToQrPlate ? waveMix : 1 - waveMix;
           } else {
@@ -1325,14 +1343,21 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         const isDenseOrnaments = curOrnaments.length > 24;
         const projected = curOrnaments
           .map((item) => {
-            const pos = slotPosition3D(item.slot, TREE_HEIGHT, TREE_BASE_RADIUS);
+            const pos = slotPosition3D(
+              item.slot,
+              TREE_HEIGHT,
+              TREE_BASE_RADIUS,
+            );
             const proj = project3D(pos.x, pos.y, pos.z);
             let drawSy = proj.sy;
             let dropFlashAlpha = 0;
             let pendulumAngle = 0;
 
             if (!curReduced && dropAnimRef.current.id === item.id) {
-              const elapsedMs = Math.max(0, now - dropAnimRef.current.startedAt);
+              const elapsedMs = Math.max(
+                0,
+                now - dropAnimRef.current.startedAt,
+              );
               const dropDurMs = 900;
               const swingDurMs = 2200;
               if (elapsedMs >= dropDurMs + swingDurMs) {
@@ -1369,16 +1394,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           .sort((a, b) => a.dz - b.dz);
 
         for (let i = 0; i < projected.length; i += 1) {
-          const {
-            item,
-            sx,
-            sy,
-            dz,
-            dropFlashAlpha,
-            pendulumAngle,
-          } = projected[i];
+          const { item, sx, sy, dz, dropFlashAlpha, pendulumAngle } =
+            projected[i];
           const color =
-            ORNAMENT_COLORS[item.colorIdx % ORNAMENT_COLORS.length] ?? "#F5C451";
+            ORNAMENT_COLORS[item.colorIdx % ORNAMENT_COLORS.length] ??
+            "#F5C451";
           const style = ORNAMENT_TYPES[item.ornamentType] ?? ORNAMENT_TYPES[0];
           const isUnread = !item.readAt;
           const isHovered = hoveredIdRef.current === item.id;
@@ -1423,7 +1443,13 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             ctx.strokeStyle = "#F5C451";
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, diskR + 4 + (1 - dropFlashAlpha) * 18, 0, Math.PI * 2);
+            ctx.arc(
+              0,
+              0,
+              diskR + 4 + (1 - dropFlashAlpha) * 18,
+              0,
+              Math.PI * 2,
+            );
             ctx.stroke();
             ctx.restore();
           }
@@ -1454,7 +1480,11 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           ctx.fill();
 
           // Outline ring (+ crisp focus/hover halo)
-          ctx.strokeStyle = isHovered ? "#F1EDE4" : isUnread ? "#F5C451" : color;
+          ctx.strokeStyle = isHovered
+            ? "#F1EDE4"
+            : isUnread
+              ? "#F5C451"
+              : color;
           ctx.lineWidth = isHovered ? 2 : isUnread ? 1.6 : 1.1;
           ctx.stroke();
 
@@ -1510,13 +1540,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             id: item.id,
             x: ox,
             y: oy,
-            r: isDenseOrnaments
-              ? isCompact
-                ? 22
-                : 19
-              : isCompact
-                ? 34
-                : 28,
+            r: isDenseOrnaments ? (isCompact ? 22 : 19) : isCompact ? 34 : 28,
           });
         }
       }
@@ -1526,7 +1550,12 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     const tick = (now: number) => {
       rafId = 0;
       drawFrame(now);
-      if (!hidden && inViewport && !propsRef.current.reducedMotion) {
+      if (
+        !hidden &&
+        inViewport &&
+        !propsRef.current.reducedMotion &&
+        !propsRef.current.staticMode
+      ) {
         rafId = requestAnimationFrame(tick);
       }
     };
@@ -1536,6 +1565,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         !hidden &&
         inViewport &&
         !propsRef.current.reducedMotion &&
+        !propsRef.current.staticMode &&
         rafId === 0
       ) {
         lastTime = performance.now();
@@ -1557,8 +1587,14 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    drawFrame(performance.now());
-    ensureLoop();
+    if (propsRef.current.reducedMotion || propsRef.current.staticMode) {
+      rafId = requestAnimationFrame((ts) => {
+        rafId = 0;
+        drawFrame(ts);
+      });
+    } else {
+      ensureLoop();
+    }
 
     const handleResize = () => {
       drawFrame(performance.now());
@@ -1698,7 +1734,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       ) : (
         <canvas
           ref={canvasRef}
-          className={`tree-canvas${hoveredInfo ? " is-hovering-ornament" : ""}`}
+          className={`tree-canvas${hoveredInfo ? "is-hovering-ornament" : ""}`}
           style={{ touchAction: "none" }}
           aria-label={
             viewMode === "qr"
@@ -1722,8 +1758,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               return;
             }
             dragStateRef.current = {
-              active:
-                viewMode !== "qr" && activePointersRef.current.size === 1,
+              active: viewMode !== "qr" && activePointersRef.current.size === 1,
               pointerId: event.pointerId,
               startX: event.clientX,
               startY: event.clientY,
@@ -1745,10 +1780,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
               viewMode !== "qr"
             ) {
               const pts = Array.from(activePointersRef.current.values());
-              const dist = Math.hypot(
-                pts[0].x - pts[1].x,
-                pts[0].y - pts[1].y,
-              );
+              const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
               const nextZoom = Math.max(
                 0.72,
                 Math.min(

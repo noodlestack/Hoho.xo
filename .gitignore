@@ -47,3 +47,7 @@ next-env.d.ts
 # local QA & impeccable cache
 /.impeccable/
 /docs/polish/
+/playwright-report/
+/test-results/
+/.lighthouseci/
+/coverage/

@@ -58,7 +58,11 @@ import {
   type TreeMessage,
 } from "@/lib/messages";
 import { getDefaultCrisisResource } from "@/lib/crisis-resources";
-import { createQrMatrix, resolveTreeOrnaments, SLOT_COUNT } from "@/lib/qr-tree";
+import {
+  createQrMatrix,
+  resolveTreeOrnaments,
+  SLOT_COUNT,
+} from "@/lib/qr-tree";
 import type { PublicTreeData } from "@/lib/server-store";
 import {
   getCurrentChristmasTrack,
@@ -108,8 +112,7 @@ const InviteStorySheet = dynamic(
   { ssr: false },
 );
 
-const VAPID_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ?? "";
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ?? "";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -136,13 +139,17 @@ export function HohoExperience({
   initialPublicTree,
 }: HohoExperienceProps) {
   const isOwnerMode = mode === "owner";
-  const initialSafeHandle = initialHandle ? (parseHandle(initialHandle) ?? "") : "";
+  const initialSafeHandle = initialHandle
+    ? (parseHandle(initialHandle) ?? "")
+    : "";
   const initialVisitorTree =
     !isOwnerMode && initialPublicTree ? initialPublicTree : null;
 
   const [activeHandle, setActiveHandle] = useState<string>(initialSafeHandle);
   const [config, setConfig] = useState<TreeConfig>(() =>
-    initialVisitorTree ? initialVisitorTree.config : defaultTreeConfig(initialSafeHandle),
+    initialVisitorTree
+      ? initialVisitorTree.config
+      : defaultTreeConfig(initialSafeHandle),
   );
   const [messages, setMessages] = useState<TreeMessage[]>(() =>
     initialVisitorTree
@@ -163,6 +170,7 @@ export function HohoExperience({
   );
   const [daysToChristmas, setDaysToChristmas] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
+  const [staticMode, setStaticMode] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const [serverSynced, setServerSynced] = useState<boolean>(() =>
@@ -220,10 +228,7 @@ export function HohoExperience({
   }, [activeHandle, serverSynced, soundEnabled]);
 
   const showToast = useCallback(
-    (
-      message: string,
-      variant: "success" | "info" | "error" = "success",
-    ) => {
+    (message: string, variant: "success" | "info" | "error" = "success") => {
       if (variant === "error") {
         toast.error(message);
       } else if (variant === "info") {
@@ -289,6 +294,9 @@ export function HohoExperience({
     void (async () => {
       if (cancelled) return;
       setOrigin(window.location.origin);
+      setStaticMode(
+        new URLSearchParams(window.location.search).get("static") === "1",
+      );
       setIsOnline(navigator.onLine);
       if (VAPID_PUBLIC_KEY) {
         const ua = window.navigator.userAgent || "";
@@ -311,7 +319,9 @@ export function HohoExperience({
         targetXmas = new Date(year + 1, 11, 25);
       }
       setDaysToChristmas(
-        Math.round((targetXmas.getTime() - todayMidnight.getTime()) / 86_400_000),
+        Math.round(
+          (targetXmas.getTime() - todayMidnight.getTime()) / 86_400_000,
+        ),
       );
 
       const resolvedHandle = isOwnerMode
@@ -560,12 +570,8 @@ export function HohoExperience({
       const card = visitorCardRef.current;
       if (!card) return;
 
-      if (reducedMotion) {
-        gsap.fromTo(
-          card,
-          { opacity: 0 },
-          { opacity: 1, duration: 0.12, ease: "power1.out", clearProps: "opacity" },
-        );
+      if (reducedMotion || staticMode) {
+        gsap.set(card, { clearProps: "transform,opacity" });
         return;
       }
 
@@ -598,7 +604,7 @@ export function HohoExperience({
       let split: SplitText | null = null;
       if (promptEl && promptEl.textContent?.trim()) {
         try {
-          split = SplitText.create(promptEl, { type: "lines" });
+          split = SplitText.create(promptEl, { type: "lines", aria: "none" });
           if (split.lines.length > 0) {
             tl.from(
               split.lines,
@@ -651,7 +657,10 @@ export function HohoExperience({
           split?.revert();
         }
       };
-      window.addEventListener("pointerdown", skip, { once: true, passive: true });
+      window.addEventListener("pointerdown", skip, {
+        once: true,
+        passive: true,
+      });
       window.addEventListener("keydown", skip, { once: true, passive: true });
 
       return () => {
@@ -677,8 +686,7 @@ export function HohoExperience({
     if (!flyingOrnament || !el || reducedMotion) return;
 
     const midX = (flyingOrnament.fromX + flyingOrnament.toX) * 0.5;
-    const midY =
-      Math.min(flyingOrnament.fromY, flyingOrnament.toY) - 64;
+    const midY = Math.min(flyingOrnament.fromY, flyingOrnament.toY) - 64;
 
     const tween = gsap
       .timeline({
@@ -827,9 +835,7 @@ export function HohoExperience({
   );
 
   const handleMarkAllRead = useCallback(async () => {
-    const hasUnread = messages.some(
-      (m) => m.status === "visible" && !m.readAt,
-    );
+    const hasUnread = messages.some((m) => m.status === "visible" && !m.readAt);
     if (!hasUnread) return;
     const nowIso = new Date().toISOString();
     persistMessagesLocal((prev) =>
@@ -968,15 +974,12 @@ export function HohoExperience({
       const existing = await registration.pushManager.getSubscription();
 
       if (pushSubscribed && existing) {
-        await fetch(
-          `/api/trees/${encodeURIComponent(activeHandle)}/push`,
-          {
-            method: "DELETE",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: existing.endpoint }),
-          },
-        );
+        await fetch(`/api/trees/${encodeURIComponent(activeHandle)}/push`, {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        });
         await existing.unsubscribe();
         setPushSubscribed(false);
         showToast("Turned off push alerts for this device", "info");
@@ -1093,7 +1096,8 @@ export function HohoExperience({
 
       const submitKey =
         composeSubmitKeyRef.current ??
-        (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        (typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
       composeSubmitKeyRef.current = submitKey;
@@ -1303,7 +1307,7 @@ export function HohoExperience({
       {unreadCount > 0 ? (
         <span
           key={unreadTickSeq}
-          className={`unread-pill${unreadTickSeq > 0 ? " is-ticking" : ""}`}
+          className={`unread-pill${unreadTickSeq > 0 ? "is-ticking" : ""}`}
         >
           {unreadCount} new
         </span>
@@ -1364,7 +1368,11 @@ export function HohoExperience({
                   data-hide-mobile="true"
                 >
                   <span>Visitor</span>
-                  <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
+                  <ExternalLink
+                    size={13}
+                    strokeWidth={2.2}
+                    aria-hidden="true"
+                  />
                 </Link>
                 {mailNavBtn}
               </>
@@ -1393,7 +1401,8 @@ export function HohoExperience({
             showOrnaments={config.showOrnaments}
             ornaments={resolvedOrnaments}
             latestDroppedId={latestDroppedId}
-            reducedMotion={reducedMotion}
+            reducedMotion={reducedMotion || staticMode}
+            staticMode={staticMode}
             isOwnerMode={isOwnerMode}
             onSelectOrnament={handleSelectOrnament}
             onToggleQrView={() =>
@@ -1406,14 +1415,20 @@ export function HohoExperience({
         <div className="stage-footer">
           <div className="stage-footer-left">
             {viewMode !== "qr" ? (
-              <div className="stage-controls" role="group" aria-label="Tree zoom">
+              <div
+                className="stage-controls"
+                role="group"
+                aria-label="Tree zoom"
+              >
                 <button
                   type="button"
                   className="stage-zoom-btn"
                   aria-label="Zoom out tree"
                   title="Zoom out"
                   onClick={() =>
-                    setZoom((z) => Math.max(0.72, Number((z - 0.12).toFixed(2))))
+                    setZoom((z) =>
+                      Math.max(0.72, Number((z - 0.12).toFixed(2))),
+                    )
                   }
                 >
                   <ZoomOut size={15} strokeWidth={2.1} aria-hidden="true" />
@@ -1427,7 +1442,9 @@ export function HohoExperience({
                   aria-label="Zoom in tree"
                   title="Zoom in"
                   onClick={() =>
-                    setZoom((z) => Math.min(1.45, Number((z + 0.12).toFixed(2))))
+                    setZoom((z) =>
+                      Math.min(1.45, Number((z + 0.12).toFixed(2))),
+                    )
                   }
                 >
                   <ZoomIn size={15} strokeWidth={2.1} aria-hidden="true" />
@@ -1529,7 +1546,10 @@ export function HohoExperience({
                       onClick={() => handleOpenMessage(item)}
                     >
                       {isUnread ? (
-                        <span className="ornament-chip-dot" aria-hidden="true" />
+                        <span
+                          className="ornament-chip-dot"
+                          aria-hidden="true"
+                        />
                       ) : null}
                       <span style={{ color }} aria-hidden="true">
                         {styleMeta.glyph}
@@ -1574,881 +1594,937 @@ export function HohoExperience({
               : `Send an anonymous note to @${activeHandle}`
           }
         >
-        {!isOnline ? (
-          <div className="offline-pill" role="status">
-            Offline — changes will sync when reconnected
-          </div>
-        ) : null}
-        {isOwnerMode ? (
-          <>
-            <div
-              className="studio-tabs"
-              role="tablist"
-              aria-label="Creator studio sections"
-            >
-              <span
-                className="studio-tabs-indicator"
-                aria-hidden="true"
-                style={{
-                  transform: `translateX(${
-                    (studioTab === "share" ? 0 : studioTab === "style" ? 1 : 2) *
-                    100
-                  }%)`,
-                }}
-              />
-              <button
-                type="button"
-                role="tab"
-                aria-selected={studioTab === "share"}
-                className="studio-tab"
-                onClick={() => setStudioTab("share")}
-              >
-                Share
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={studioTab === "style"}
-                className="studio-tab"
-                onClick={() => setStudioTab("style")}
-              >
-                Style
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={studioTab === "prompt"}
-                className="studio-tab"
-                onClick={() => setStudioTab("prompt")}
-              >
-                Prompt
-              </button>
+          {!isOnline ? (
+            <div className="offline-pill" role="status">
+              Offline — changes will sync when reconnected
             </div>
-
-            {ownerClaimError ? (
-              <div className="error-box" role="alert">
-                <span>{ownerClaimError}</span>
-                {studioTab !== "prompt" ? (
-                  <button
-                    type="button"
-                    className="dice-btn mt-2"
-                    onClick={() => setStudioTab("prompt")}
-                  >
-                    Open Handle &amp; Access Key →
-                  </button>
-                ) : null}
+          ) : null}
+          {isOwnerMode ? (
+            <>
+              <div
+                className="studio-tabs"
+                role="tablist"
+                aria-label="Creator studio sections"
+              >
+                <span
+                  className="studio-tabs-indicator"
+                  aria-hidden="true"
+                  style={{
+                    transform: `translateX(${
+                      (studioTab === "share"
+                        ? 0
+                        : studioTab === "style"
+                          ? 1
+                          : 2) * 100
+                    }%)`,
+                  }}
+                />
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studioTab === "share"}
+                  className="studio-tab"
+                  onClick={() => setStudioTab("share")}
+                >
+                  Share
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studioTab === "style"}
+                  className="studio-tab"
+                  onClick={() => setStudioTab("style")}
+                >
+                  Style
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studioTab === "prompt"}
+                  className="studio-tab"
+                  onClick={() => setStudioTab("prompt")}
+                >
+                  Prompt
+                </button>
               </div>
-            ) : null}
 
-            {studioTab === "share" ? (
-              <>
-                <div className="bio-profile-flat">
-                  <div className="bio-identity-row">
-                    <div className="avatar-ring" aria-hidden="true">
-                      {avatarGlyph}
-                    </div>
-                    <div className="bio-identity-text">
-                      <p className="bio-name">
-                        {config.displayName || `@${activeHandle}`}
-                      </p>
-                      <p className="bio-handle-line">
-                        <span>@{activeHandle}</span>
-                        <span>·</span>
-                        <span
-                          className={`status-dot ${
-                            config.pauseInbox ? "is-paused" : ""
-                          }`}
-                          aria-hidden="true"
-                        />
-                        <span>
-                          {config.pauseInbox ? "Paused" : "Accepting notes"}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                  <p className="bio-prompt-text">{config.prompt}</p>
-                  {daysToChristmas !== null ? (
-                    <span className="countdown-pill">
-                      🎄{" "}
-                      {daysToChristmas === 0
-                        ? "Merry Christmas!"
-                        : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
-                    </span>
+              {ownerClaimError ? (
+                <div className="error-box" role="alert">
+                  <span>{ownerClaimError}</span>
+                  {studioTab !== "prompt" ? (
+                    <button
+                      type="button"
+                      className="dice-btn mt-2"
+                      onClick={() => setStudioTab("prompt")}
+                    >
+                      Open Handle &amp; Access Key →
+                    </button>
                   ) : null}
                 </div>
+              ) : null}
 
-                <div className="share-row-wrap">
-                  <span className="section-label">
-                    Your bio link ({serverSynced ? "short QR ready" : "portable link"})
-                  </span>
-                  <div className="share-link-pill">
-                    <span className="share-link-display" title={shareUrl}>
-                      {formatDisplayShareUrl(shareUrl)}
+              {studioTab === "share" ? (
+                <>
+                  <div className="bio-profile-flat">
+                    <div className="bio-identity-row">
+                      <div className="avatar-ring" aria-hidden="true">
+                        {avatarGlyph}
+                      </div>
+                      <div className="bio-identity-text">
+                        <p className="bio-name">
+                          {config.displayName || `@${activeHandle}`}
+                        </p>
+                        <p className="bio-handle-line">
+                          <span>@{activeHandle}</span>
+                          <span>·</span>
+                          <span
+                            className={`status-dot ${
+                              config.pauseInbox ? "is-paused" : ""
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span>
+                            {config.pauseInbox ? "Paused" : "Accepting notes"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <p className="bio-prompt-text">{config.prompt}</p>
+                    {daysToChristmas !== null ? (
+                      <span className="countdown-pill">
+                        🎄{" "}
+                        {daysToChristmas === 0
+                          ? "Merry Christmas!"
+                          : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="share-row-wrap">
+                    <span className="section-label">
+                      Your bio link (
+                      {serverSynced ? "short QR ready" : "portable link"})
                     </span>
-                    <button
-                      type="button"
-                      className={`share-copy-icon-btn ${copiedLink ? "is-copied" : ""}`}
-                      aria-label={copiedLink ? "Copied bio link" : "Copy bio link"}
-                      onClick={handleCopyLink}
-                    >
-                      <span
-                        className={`copy-glyph ${
-                          copiedLink ? "is-hidden" : "is-visible"
-                        }`}
-                        aria-hidden="true"
-                      >
-                        <Copy size={14} strokeWidth={2} />
+                    <div className="share-link-pill">
+                      <span className="share-link-display" title={shareUrl}>
+                        {formatDisplayShareUrl(shareUrl)}
                       </span>
-                      <span
-                        className={`copy-glyph ${
-                          copiedLink ? "is-visible" : "is-hidden"
-                        }`}
-                        aria-hidden="true"
+                      <button
+                        type="button"
+                        className={`share-copy-icon-btn ${copiedLink ? "is-copied" : ""}`}
+                        aria-label={
+                          copiedLink ? "Copied bio link" : "Copy bio link"
+                        }
+                        onClick={handleCopyLink}
                       >
-                        <Check size={14} strokeWidth={2.2} />
-                      </span>
-                    </button>
+                        <span
+                          className={`copy-glyph ${
+                            copiedLink ? "is-hidden" : "is-visible"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <Copy size={14} strokeWidth={2} />
+                        </span>
+                        <span
+                          className={`copy-glyph ${
+                            copiedLink ? "is-visible" : "is-hidden"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <Check size={14} strokeWidth={2.2} />
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="share-cta-stack">
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    onClick={() => {
-                      setMobileSheetOpen(false);
-                      setInviteSheetOpen(true);
-                    }}
-                  >
-                    <Share2 size={15} strokeWidth={2} aria-hidden="true" />
-                    <span>Share to Story</span>
-                  </button>
-                  <div className="share-secondary-row">
+                  <div className="share-cta-stack">
                     <button
                       type="button"
-                      className="secondary-btn"
-                      onClick={() =>
-                        changeViewMode((prev) => (prev === "qr" ? "tree" : "qr"))
-                      }
+                      className="primary-btn"
+                      onClick={() => {
+                        setMobileSheetOpen(false);
+                        setInviteSheetOpen(true);
+                      }}
                     >
-                      {viewMode === "qr" ? (
-                        <>
-                          <TreePine size={15} strokeWidth={2} aria-hidden="true" />
-                          <span>Show Tree</span>
-                        </>
-                      ) : (
-                        <>
-                          <QrCode size={15} strokeWidth={2} aria-hidden="true" />
-                          <span>Show QR</span>
-                        </>
-                      )}
+                      <Share2 size={15} strokeWidth={2} aria-hidden="true" />
+                      <span>Share to Story</span>
                     </button>
-                    <Link href={visitorRelativeHref} className="secondary-btn">
-                      <span>Preview</span>
-                      <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
-                    </Link>
-                  </div>
-                  {VAPID_PUBLIC_KEY ? (
-                    <>
+                    <div className="share-secondary-row">
                       <button
                         type="button"
                         className="secondary-btn"
-                        aria-pressed={pushSubscribed}
-                        disabled={pushBusy}
-                        onClick={() => void handleTogglePush()}
+                        onClick={() =>
+                          changeViewMode((prev) =>
+                            prev === "qr" ? "tree" : "qr",
+                          )
+                        }
                       >
-                        {pushSubscribed ? (
+                        {viewMode === "qr" ? (
                           <>
-                            <Bell size={14} strokeWidth={2} aria-hidden="true" />
-                            <span>Notify me: On</span>
+                            <TreePine
+                              size={15}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                            />
+                            <span>Show Tree</span>
                           </>
                         ) : (
                           <>
-                            <BellOff size={14} strokeWidth={2} aria-hidden="true" />
-                            <span>Notify me</span>
+                            <QrCode
+                              size={15}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                            />
+                            <span>Show QR</span>
                           </>
                         )}
                       </button>
-                      {iosNeedsStandalone ? (
-                        <p className="tree-meta-line">
-                          On iPhone, add Hoho.xo to your Home Screen first to
-                          enable Web Push.
-                        </p>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-
-                {unreadCount > 0 && newestUnread ? (
-                  <button
-                    type="button"
-                    className="unread-spotlight-btn"
-                    onClick={() => handleOpenMessage(newestUnread)}
-                  >
-                    <Mail size={14} strokeWidth={2.1} aria-hidden="true" />
-                    <span>Unwrap newest unread ({unreadCount})</span>
-                  </button>
-                ) : null}
-
-                {messages.length === 0 ? (
-                  <p className="share-empty-state">
-                    Your tree is bare. Share your link and it fills up.
-                  </p>
-                ) : (
-                  <div className="share-stats-row">
-                    <div className="share-stat-cell">
-                      <span
-                        className="share-stat-value"
-                        data-count-value={visibleCount}
+                      <Link
+                        href={visitorRelativeHref}
+                        className="secondary-btn"
                       >
-                        {visibleCount}
-                      </span>
-                      <span className="share-stat-label">On tree</span>
-                    </div>
-                    <div className="share-stat-cell">
-                      <span
-                        className="share-stat-value"
-                        data-count-value={messages.length}
-                      >
-                        {messages.length}
-                      </span>
-                      <span className="share-stat-label">Total</span>
-                    </div>
-                    <div className="share-stat-cell">
-                      <span className="share-stat-value">
-                        {unreadCount > 0 ? (
-                          <span
-                            className="unread-stat-dot"
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        <span data-count-value={unreadCount}>{unreadCount}</span>
-                      </span>
-                      <span className="share-stat-label">Unread</span>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : null}
-
-            {studioTab === "style" ? (
-              <div className="edit-stack">
-                <div>
-                  <span className="section-label">
-                    Color theme ({TREE_THEME_LIST.length})
-                  </span>
-                  <div
-                    className="theme-grid"
-                    role="group"
-                    aria-label="Tree color theme"
-                  >
-                    {TREE_THEME_LIST.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="theme-swatch-btn"
-                        aria-pressed={config.themeId === item.id}
-                        onClick={() => updateConfig({ themeId: item.id })}
-                      >
-                        <span
-                          className="theme-dot"
-                          style={{ backgroundColor: item.swatch }}
+                        <span>Preview</span>
+                        <ExternalLink
+                          size={14}
+                          strokeWidth={2}
                           aria-hidden="true"
                         />
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
+                      </Link>
+                    </div>
+                    {VAPID_PUBLIC_KEY ? (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          aria-pressed={pushSubscribed}
+                          disabled={pushBusy}
+                          onClick={() => void handleTogglePush()}
+                        >
+                          {pushSubscribed ? (
+                            <>
+                              <Bell
+                                size={14}
+                                strokeWidth={2}
+                                aria-hidden="true"
+                              />
+                              <span>Notify me: On</span>
+                            </>
+                          ) : (
+                            <>
+                              <BellOff
+                                size={14}
+                                strokeWidth={2}
+                                aria-hidden="true"
+                              />
+                              <span>Notify me</span>
+                            </>
+                          )}
+                        </button>
+                        {iosNeedsStandalone ? (
+                          <p className="tree-meta-line">
+                            On iPhone, add Hoho.xo to your Home Screen first to
+                            enable Web Push.
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
                   </div>
-                </div>
 
-                <div>
-                  <span className="section-label">
-                    Apex topper ({TREE_TOPPERS.length})
-                  </span>
-                  <div
-                    className="topper-grid"
-                    role="group"
-                    aria-label="Tree topper"
-                  >
-                    {TREE_TOPPERS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="topper-btn"
-                        aria-pressed={config.topper === item.id}
-                        onClick={() => updateConfig({ topper: item.id })}
-                      >
-                        <span className="topper-glyph" aria-hidden="true">
-                          {item.glyph}
-                        </span>
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="section-label">
-                    Tree silhouette ({TREE_SHAPES.length})
-                  </span>
-                  <div
-                    className="shape-grid"
-                    role="group"
-                    aria-label="Tree silhouette"
-                  >
-                    {TREE_SHAPES.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="shape-btn"
-                        aria-pressed={config.shape === item.id}
-                        onClick={() => updateConfig({ shape: item.id })}
-                      >
-                        <strong>{item.label}</strong>
-                        <span>{item.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="section-label">
-                    Winter scenery ({TREE_SCENERIES.length})
-                  </span>
-                  <div
-                    className="scenery-grid"
-                    role="group"
-                    aria-label="Winter scenery"
-                  >
-                    {TREE_SCENERIES.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="shape-btn"
-                        aria-pressed={config.scenery === item.id}
-                        onClick={() => updateConfig({ scenery: item.id })}
-                      >
-                        <strong>{item.label}</strong>
-                        <span>{item.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="section-label">
-                    Christmas Music Box · {currentTrack.title}
-                  </span>
-                  <div className="music-box-controls">
+                  {unreadCount > 0 && newestUnread ? (
                     <button
                       type="button"
-                      className="secondary-btn"
-                      aria-pressed={musicPlaying}
-                      onClick={handleToggleMusic}
+                      className="unread-spotlight-btn"
+                      onClick={() => handleOpenMessage(newestUnread)}
                     >
-                      <Music size={14} strokeWidth={2} aria-hidden="true" />
-                      <span>{musicPlaying ? "Pause Carol" : "Play Carol"}</span>
+                      <Mail size={14} strokeWidth={2.1} aria-hidden="true" />
+                      <span>Unwrap newest unread ({unreadCount})</span>
                     </button>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={handleNextTrack}
-                    >
-                      <SkipForward size={14} strokeWidth={2} aria-hidden="true" />
-                      <span>Next Carol</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="section-label">Canvas effects</span>
-                  <div className="toggle-grid">
-                    <label className="switch-label">
-                      <span>Atmosphere</span>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={config.showSnow}
-                        onChange={(event) =>
-                          updateConfig({ showSnow: event.target.checked })
-                        }
-                      />
-                      <span className="switch-track" aria-hidden="true" />
-                    </label>
-                    <label className="switch-label">
-                      <span>Lights</span>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={config.showGarland}
-                        onChange={(event) =>
-                          updateConfig({ showGarland: event.target.checked })
-                        }
-                      />
-                      <span className="switch-track" aria-hidden="true" />
-                    </label>
-                    <label className="switch-label">
-                      <span>Ornaments</span>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={config.showOrnaments}
-                        onChange={(event) =>
-                          updateConfig({ showOrnaments: event.target.checked })
-                        }
-                      />
-                      <span className="switch-track" aria-hidden="true" />
-                    </label>
-                    <label className="switch-label">
-                      <span>Chimes</span>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={soundEnabled}
-                        onChange={(event) =>
-                          setSoundEnabled(event.target.checked)
-                        }
-                      />
-                      <span className="switch-track" aria-hidden="true" />
-                    </label>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {studioTab === "prompt" ? (
-              <div className="edit-stack">
-                <div>
-                  <span className="section-label">Avatar emblem</span>
-                  <div
-                    className="avatar-picker-row"
-                    role="group"
-                    aria-label="Avatar emblem"
-                  >
-                    {TREE_AVATARS.map((item) => (
-                      <button
-                        key={item.id || "initial"}
-                        type="button"
-                        className="avatar-choice-btn"
-                        aria-label={item.label}
-                        title={item.label}
-                        aria-pressed={config.avatar === item.id}
-                        onClick={() => updateConfig({ avatar: item.id })}
-                      >
-                        {item.id ||
-                          (config.displayName.trim()[0]?.toUpperCase() || "A")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="edit-field">
-                  <label htmlFor="owner-handle-input" className="section-label">
-                    {activeHandle
-                      ? `Tree handle (/t/${activeHandle})`
-                      : "Choose your tree handle (/t/...)"}
-                  </label>
-                  <div className="url-row">
-                    <input
-                      id="owner-handle-input"
-                      type="text"
-                      className="social-input is-mono"
-                      placeholder="e.g. santa_2026"
-                      maxLength={21}
-                      value={handleDraft}
-                      onChange={(event) => setHandleDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void commitHandleChange(handleDraft);
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => void commitHandleChange(handleDraft)}
-                    >
-                      Set
-                    </button>
-                  </div>
-                  {hasInvalidHandleDraft ? (
-                    <p className="handle-pending-hint">
-                      Handles use 3–20 letters, numbers, or underscores.
-                    </p>
-                  ) : hasPendingHandleChange && pendingHandleSlug ? (
-                    <p className="handle-pending-hint">
-                      Click Set to switch to @{pendingHandleSlug}
-                    </p>
                   ) : null}
-                </div>
 
-                <div className="edit-field">
-                  <label htmlFor="owner-name-input" className="section-label">
-                    Display name
-                  </label>
-                  <input
-                    id="owner-name-input"
-                    type="text"
-                    className="social-input"
-                    maxLength={28}
-                    value={config.displayName}
-                    onChange={(event) =>
-                      updateConfig({ displayName: event.target.value })
-                    }
-                  />
-                </div>
+                  {messages.length === 0 ? (
+                    <p className="share-empty-state">
+                      Your tree is bare. Share your link and it fills up.
+                    </p>
+                  ) : (
+                    <div className="share-stats-row">
+                      <div className="share-stat-cell">
+                        <span
+                          className="share-stat-value"
+                          data-count-value={visibleCount}
+                        >
+                          {visibleCount}
+                        </span>
+                        <span className="share-stat-label">On tree</span>
+                      </div>
+                      <div className="share-stat-cell">
+                        <span
+                          className="share-stat-value"
+                          data-count-value={messages.length}
+                        >
+                          {messages.length}
+                        </span>
+                        <span className="share-stat-label">Total</span>
+                      </div>
+                      <div className="share-stat-cell">
+                        <span className="share-stat-value">
+                          {unreadCount > 0 ? (
+                            <span
+                              className="unread-stat-dot"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          <span data-count-value={unreadCount}>
+                            {unreadCount}
+                          </span>
+                        </span>
+                        <span className="share-stat-label">Unread</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
 
-                <div className="edit-field">
-                  <div className="prompt-header-row">
+              {studioTab === "style" ? (
+                <div className="edit-stack">
+                  <div>
+                    <span className="section-label">
+                      Color theme ({TREE_THEME_LIST.length})
+                    </span>
+                    <div
+                      className="theme-grid"
+                      role="group"
+                      aria-label="Tree color theme"
+                    >
+                      {TREE_THEME_LIST.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="theme-swatch-btn"
+                          aria-pressed={config.themeId === item.id}
+                          onClick={() => updateConfig({ themeId: item.id })}
+                        >
+                          <span
+                            className="theme-dot"
+                            style={{ backgroundColor: item.swatch }}
+                            aria-hidden="true"
+                          />
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="section-label">
+                      Apex topper ({TREE_TOPPERS.length})
+                    </span>
+                    <div
+                      className="topper-grid"
+                      role="group"
+                      aria-label="Tree topper"
+                    >
+                      {TREE_TOPPERS.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="topper-btn"
+                          aria-pressed={config.topper === item.id}
+                          onClick={() => updateConfig({ topper: item.id })}
+                        >
+                          <span className="topper-glyph" aria-hidden="true">
+                            {item.glyph}
+                          </span>
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="section-label">
+                      Tree silhouette ({TREE_SHAPES.length})
+                    </span>
+                    <div
+                      className="shape-grid"
+                      role="group"
+                      aria-label="Tree silhouette"
+                    >
+                      {TREE_SHAPES.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="shape-btn"
+                          aria-pressed={config.shape === item.id}
+                          onClick={() => updateConfig({ shape: item.id })}
+                        >
+                          <strong>{item.label}</strong>
+                          <span>{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="section-label">
+                      Winter scenery ({TREE_SCENERIES.length})
+                    </span>
+                    <div
+                      className="scenery-grid"
+                      role="group"
+                      aria-label="Winter scenery"
+                    >
+                      {TREE_SCENERIES.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="shape-btn"
+                          aria-pressed={config.scenery === item.id}
+                          onClick={() => updateConfig({ scenery: item.id })}
+                        >
+                          <strong>{item.label}</strong>
+                          <span>{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="section-label">
+                      Christmas Music Box · {currentTrack.title}
+                    </span>
+                    <div className="music-box-controls">
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        aria-pressed={musicPlaying}
+                        onClick={handleToggleMusic}
+                      >
+                        <Music size={14} strokeWidth={2} aria-hidden="true" />
+                        <span>
+                          {musicPlaying ? "Pause Carol" : "Play Carol"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={handleNextTrack}
+                      >
+                        <SkipForward
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        />
+                        <span>Next Carol</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="section-label">Canvas effects</span>
+                    <div className="toggle-grid">
+                      <label className="switch-label">
+                        <span>Atmosphere</span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={config.showSnow}
+                          onChange={(event) =>
+                            updateConfig({ showSnow: event.target.checked })
+                          }
+                        />
+                        <span className="switch-track" aria-hidden="true" />
+                      </label>
+                      <label className="switch-label">
+                        <span>Lights</span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={config.showGarland}
+                          onChange={(event) =>
+                            updateConfig({ showGarland: event.target.checked })
+                          }
+                        />
+                        <span className="switch-track" aria-hidden="true" />
+                      </label>
+                      <label className="switch-label">
+                        <span>Ornaments</span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={config.showOrnaments}
+                          onChange={(event) =>
+                            updateConfig({
+                              showOrnaments: event.target.checked,
+                            })
+                          }
+                        />
+                        <span className="switch-track" aria-hidden="true" />
+                      </label>
+                      <label className="switch-label">
+                        <span>Chimes</span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={soundEnabled}
+                          onChange={(event) =>
+                            setSoundEnabled(event.target.checked)
+                          }
+                        />
+                        <span className="switch-track" aria-hidden="true" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {studioTab === "prompt" ? (
+                <div className="edit-stack">
+                  <div>
+                    <span className="section-label">Avatar emblem</span>
+                    <div
+                      className="avatar-picker-row"
+                      role="group"
+                      aria-label="Avatar emblem"
+                    >
+                      {TREE_AVATARS.map((item) => (
+                        <button
+                          key={item.id || "initial"}
+                          type="button"
+                          className="avatar-choice-btn"
+                          aria-label={item.label}
+                          title={item.label}
+                          aria-pressed={config.avatar === item.id}
+                          onClick={() => updateConfig({ avatar: item.id })}
+                        >
+                          {item.id ||
+                            config.displayName.trim()[0]?.toUpperCase() ||
+                            "A"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="edit-field">
                     <label
-                      htmlFor="owner-prompt-input"
+                      htmlFor="owner-handle-input"
                       className="section-label"
                     >
-                      Bio question prompt
+                      {activeHandle
+                        ? `Tree handle (/t/${activeHandle})`
+                        : "Choose your tree handle (/t/...)"}
                     </label>
-                    <button
-                      type="button"
-                      className="dice-btn"
-                      onClick={handleCycleOwnerPrompt}
-                    >
-                      <Dices size={14} strokeWidth={2} aria-hidden="true" />
-                      <span>Prompt</span>
-                    </button>
+                    <div className="url-row">
+                      <input
+                        id="owner-handle-input"
+                        type="text"
+                        className="social-input is-mono"
+                        placeholder="e.g. santa_2026"
+                        maxLength={21}
+                        value={handleDraft}
+                        onChange={(event) => setHandleDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void commitHandleChange(handleDraft);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => void commitHandleChange(handleDraft)}
+                      >
+                        Set
+                      </button>
+                    </div>
+                    {hasInvalidHandleDraft ? (
+                      <p className="handle-pending-hint">
+                        Handles use 3–20 letters, numbers, or underscores.
+                      </p>
+                    ) : hasPendingHandleChange && pendingHandleSlug ? (
+                      <p className="handle-pending-hint">
+                        Click Set to switch to @{pendingHandleSlug}
+                      </p>
+                    ) : null}
                   </div>
-                  <textarea
-                    id="owner-prompt-input"
-                    className="edit-textarea"
-                    maxLength={140}
-                    value={config.prompt}
-                    onChange={(event) =>
-                      updateConfig({ prompt: event.target.value })
-                    }
-                  />
-                </div>
 
-                <div className="edit-field">
-                  <label
-                    htmlFor="owner-muted-words"
-                    className="section-label"
-                  >
-                    Hidden word filter (comma-separated)
-                  </label>
-                  <input
-                    id="owner-muted-words"
-                    type="text"
-                    className="social-input"
-                    maxLength={200}
-                    placeholder="e.g. spoiler, ex-name"
-                    value={config.mutedWords}
-                    onChange={(event) =>
-                      updateConfig({ mutedWords: event.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="toggle-grid">
-                  <label className="switch-label">
-                    <span>Pause inbox</span>
+                  <div className="edit-field">
+                    <label htmlFor="owner-name-input" className="section-label">
+                      Display name
+                    </label>
                     <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={config.pauseInbox}
+                      id="owner-name-input"
+                      type="text"
+                      className="social-input"
+                      maxLength={28}
+                      value={config.displayName}
                       onChange={(event) =>
-                        updateConfig({ pauseInbox: event.target.checked })
+                        updateConfig({ displayName: event.target.value })
                       }
                     />
-                    <span className="switch-track" aria-hidden="true" />
-                  </label>
-                  <label className="switch-label">
-                    <span>Wrap Dec 25</span>
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={config.christmasLock}
-                      onChange={(event) =>
-                        updateConfig({ christmasLock: event.target.checked })
-                      }
-                    />
-                    <span className="switch-track" aria-hidden="true" />
-                  </label>
-                </div>
+                  </div>
 
-                <div className="key-box">
-                  <div className="prompt-header-row">
-                    <span className="section-label m-0">Owner Access Key</span>
-                    {ownerKey ? (
+                  <div className="edit-field">
+                    <div className="prompt-header-row">
+                      <label
+                        htmlFor="owner-prompt-input"
+                        className="section-label"
+                      >
+                        Bio question prompt
+                      </label>
                       <button
                         type="button"
                         className="dice-btn"
-                        onClick={() =>
-                          void handleCopyText(ownerKey, "Owner Access Key")
-                        }
+                        onClick={handleCycleOwnerPrompt}
                       >
-                        <Copy size={13} strokeWidth={2} aria-hidden="true" />
-                        <span>Copy Key</span>
+                        <Dices size={14} strokeWidth={2} aria-hidden="true" />
+                        <span>Prompt</span>
                       </button>
-                    ) : null}
+                    </div>
+                    <textarea
+                      id="owner-prompt-input"
+                      className="edit-textarea"
+                      maxLength={140}
+                      value={config.prompt}
+                      onChange={(event) =>
+                        updateConfig({ prompt: event.target.value })
+                      }
+                    />
                   </div>
-                  <p className="tree-meta-line">
-                    {ownerKey
-                      ? "Save this now, it can't be shown again. Your session is protected by an HttpOnly cookie."
-                      : "Enter the Owner Access Key for an existing handle to unlock Mail here."}
-                  </p>
-                  <form className="url-row" onSubmit={handleUnlockWithKey}>
-                    <label htmlFor="owner-unlock-key" className="sr-only">
-                      Owner Access Key
+
+                  <div className="edit-field">
+                    <label
+                      htmlFor="owner-muted-words"
+                      className="section-label"
+                    >
+                      Hidden word filter (comma-separated)
                     </label>
                     <input
-                      id="owner-unlock-key"
-                      type="password"
-                      className="social-input is-mono"
-                      placeholder="Paste key to unlock..."
-                      value={unlockDraft}
-                      onChange={(event) => setUnlockDraft(event.target.value)}
-                    />
-                    <button type="submit" className="secondary-btn">
-                      <KeyRound size={14} strokeWidth={2} aria-hidden="true" />
-                      <span>Unlock</span>
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <div className="bio-hero-card">
-              <div className="bio-identity-row">
-                <div className="avatar-ring" aria-hidden="true">
-                  {avatarGlyph}
-                </div>
-                <div className="bio-identity-text">
-                  <p className="bio-name">
-                    {config.displayName || `@${activeHandle}`}
-                  </p>
-                  <p className="bio-handle-line">
-                    <span>@{activeHandle}</span>
-                    <span>·</span>
-                    <span>{theme.label}</span>
-                    <span>·</span>
-                    <span
-                      className={`status-dot ${
-                        config.pauseInbox ? "is-paused" : ""
-                      }`}
-                      aria-hidden="true"
-                    />
-                    <span>{config.pauseInbox ? "Paused" : "Active"}</span>
-                  </p>
-                </div>
-              </div>
-              <p className="bio-prompt-text">{config.prompt}</p>
-              {daysToChristmas !== null ? (
-                <span className="countdown-pill">
-                  🎄{" "}
-                  {daysToChristmas === 0
-                    ? "Merry Christmas!"
-                    : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
-                </span>
-              ) : null}
-            </div>
-
-            <p className="tree-meta-line">
-              {visibleCount} {visibleCount === 1 ? "ornament" : "ornaments"}{" "}
-              hanging on @{activeHandle}&apos;s tree
-            </p>
-
-            {config.pauseInbox ? (
-              <div className="paused-banner">
-                <strong>Inbox paused</strong>
-                <span>
-                  @{activeHandle} has paused new anonymous notes right now.
-                </span>
-                <Link href="/" className="make-tree-link">
-                  Make your own tree →
-                </Link>
-              </div>
-            ) : visitorSentOrnament ? (
-              <div className="celebrate-box">
-                <div
-                  className="avatar-ring"
-                  style={{
-                    margin: "0 auto",
-                    color: sentOrnamentColor,
-                    borderColor: sentOrnamentColor,
-                  }}
-                  aria-hidden="true"
-                >
-                  {sentOrnamentMeta?.glyph ?? "*"}
-                </div>
-                <p className="celebrate-title">
-                  Ornament hung on @{activeHandle}&apos;s tree!
-                </p>
-                <p className="anonymity-note">
-                  Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}.
-                  Only @{activeHandle} can unwrap it in Mail.
-                </p>
-                <Link href="/" className="primary-btn celebrate-hero-cta">
-                  <span>Get your own tree →</span>
-                </Link>
-                <button
-                  type="button"
-                  className="secondary-btn celebrate-again-btn"
-                  onClick={() => {
-                    setVisitorSentOrnament(null);
-                    window.setTimeout(
-                      () => visitorInputRef.current?.focus(),
-                      60,
-                    );
-                  }}
-                >
-                  Send another
-                </button>
-              </div>
-            ) : (
-              <form className="compose-box" onSubmit={handleVisitorSubmit}>
-                <input
-                  type="text"
-                  name="website"
-                  value={honeypot}
-                  onChange={(event) => setHoneypot(event.target.value)}
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  className="honeypot-field"
-                />
-                <label htmlFor="visitor-note-input" className="sr-only">
-                  Send an anonymous note
-                </label>
-                <div className="compose-textarea-wrap">
-                  <textarea
-                    id="visitor-note-input"
-                    ref={visitorInputRef}
-                    className="compose-textarea"
-                    placeholder="Send an anonymous note to hang on this tree..."
-                    maxLength={500}
-                    value={noteBody}
-                    onChange={(event) => {
-                      const nextVal = event.target.value;
-                      setNoteBody(nextVal);
-                      writeVisitorDraft(activeHandle, nextVal);
-                      composeSubmitKeyRef.current = null;
-                      if (submitError) setSubmitError("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        (event.ctrlKey || event.metaKey) &&
-                        event.key === "Enter" &&
-                        noteBody.trim().length > 0 &&
-                        !submittingNote
-                      ) {
-                        event.preventDefault();
-                        event.currentTarget.form?.requestSubmit();
+                      id="owner-muted-words"
+                      type="text"
+                      className="social-input"
+                      maxLength={200}
+                      placeholder="e.g. spoiler, ex-name"
+                      value={config.mutedWords}
+                      onChange={(event) =>
+                        updateConfig({ mutedWords: event.target.value })
                       }
-                    }}
-                  />
-                  <div className="compose-corner-bar">
-                    <button
-                      type="button"
-                      className="dice-btn"
-                      onClick={handleVisitorDice}
-                    >
-                      <Dices size={14} strokeWidth={2} aria-hidden="true" />
-                      <span>Idea</span>
-                    </button>
-                    <span className="char-counter">{noteBody.length}/500</span>
+                    />
+                  </div>
+
+                  <div className="toggle-grid">
+                    <label className="switch-label">
+                      <span>Pause inbox</span>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={config.pauseInbox}
+                        onChange={(event) =>
+                          updateConfig({ pauseInbox: event.target.checked })
+                        }
+                      />
+                      <span className="switch-track" aria-hidden="true" />
+                    </label>
+                    <label className="switch-label">
+                      <span>Wrap Dec 25</span>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={config.christmasLock}
+                        onChange={(event) =>
+                          updateConfig({ christmasLock: event.target.checked })
+                        }
+                      />
+                      <span className="switch-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="key-box">
+                    <div className="prompt-header-row">
+                      <span className="section-label m-0">
+                        Owner Access Key
+                      </span>
+                      {ownerKey ? (
+                        <button
+                          type="button"
+                          className="dice-btn"
+                          onClick={() =>
+                            void handleCopyText(ownerKey, "Owner Access Key")
+                          }
+                        >
+                          <Copy size={13} strokeWidth={2} aria-hidden="true" />
+                          <span>Copy Key</span>
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="tree-meta-line">
+                      {ownerKey
+                        ? "Save this now, it can't be shown again. Your session is protected by an HttpOnly cookie."
+                        : "Enter the Owner Access Key for an existing handle to unlock Mail here."}
+                    </p>
+                    <form className="url-row" onSubmit={handleUnlockWithKey}>
+                      <label htmlFor="owner-unlock-key" className="sr-only">
+                        Owner Access Key
+                      </label>
+                      <input
+                        id="owner-unlock-key"
+                        type="password"
+                        className="social-input is-mono"
+                        placeholder="Paste key to unlock..."
+                        value={unlockDraft}
+                        onChange={(event) => setUnlockDraft(event.target.value)}
+                      />
+                      <button type="submit" className="secondary-btn">
+                        <KeyRound
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        />
+                        <span>Unlock</span>
+                      </button>
+                    </form>
                   </div>
                 </div>
-                <div className="compose-progress-track" aria-hidden="true">
-                  <div
-                    className={`compose-progress-fill ${
-                      noteBody.length >= 450 ? "is-near-limit" : ""
-                    }`}
-                    style={{
-                      width: `${Math.min(100, (noteBody.length / 500) * 100)}%`,
-                    }}
-                  />
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="bio-hero-card">
+                <div className="bio-identity-row">
+                  <div className="avatar-ring" aria-hidden="true">
+                    {avatarGlyph}
+                  </div>
+                  <div className="bio-identity-text">
+                    <p className="bio-name">
+                      {config.displayName || `@${activeHandle}`}
+                    </p>
+                    <p className="bio-handle-line">
+                      <span>@{activeHandle}</span>
+                      <span>·</span>
+                      <span>{theme.label}</span>
+                      <span>·</span>
+                      <span
+                        className={`status-dot ${
+                          config.pauseInbox ? "is-paused" : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>{config.pauseInbox ? "Paused" : "Active"}</span>
+                    </p>
+                  </div>
                 </div>
-
-                <div>
-                  <span className="section-label">
-                    Pick an ornament ({ORNAMENT_TYPES.length} styles)
+                <p className="bio-prompt-text">{config.prompt}</p>
+                {daysToChristmas !== null ? (
+                  <span className="countdown-pill">
+                    🎄{" "}
+                    {daysToChristmas === 0
+                      ? "Merry Christmas!"
+                      : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
                   </span>
+                ) : null}
+              </div>
+
+              <p className="tree-meta-line">
+                {visibleCount} {visibleCount === 1 ? "ornament" : "ornaments"}{" "}
+                hanging on @{activeHandle}&apos;s tree
+              </p>
+
+              {config.pauseInbox ? (
+                <div className="paused-banner">
+                  <strong>Inbox paused</strong>
+                  <span>
+                    @{activeHandle} has paused new anonymous notes right now.
+                  </span>
+                  <Link href="/" className="make-tree-link">
+                    Make your own tree →
+                  </Link>
+                </div>
+              ) : visitorSentOrnament ? (
+                <div className="celebrate-box">
                   <div
-                    className="ornament-strip"
-                    role="group"
-                    aria-label="Choose ornament style"
+                    className="avatar-ring"
+                    style={{
+                      margin: "0 auto",
+                      color: sentOrnamentColor,
+                      borderColor: sentOrnamentColor,
+                    }}
+                    aria-hidden="true"
                   >
-                    <button
-                      type="button"
-                      className="ornament-pill"
-                      aria-pressed={selectedOrnament === null}
-                      onClick={() => setSelectedOrnament(null)}
-                    >
-                      <span className="ornament-pill-glyph" aria-hidden="true">
-                        ✨
-                      </span>
-                      <span>Surprise</span>
-                    </button>
-                    {ORNAMENT_TYPES.map((item) => (
+                    {sentOrnamentMeta?.glyph ?? "*"}
+                  </div>
+                  <p className="celebrate-title">
+                    Ornament hung on @{activeHandle}&apos;s tree!
+                  </p>
+                  <p className="anonymity-note">
+                    Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}.
+                    Only @{activeHandle} can unwrap it in Mail.
+                  </p>
+                  <Link href="/" className="primary-btn celebrate-hero-cta">
+                    <span>Get your own tree →</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="secondary-btn celebrate-again-btn"
+                    onClick={() => {
+                      setVisitorSentOrnament(null);
+                      window.setTimeout(
+                        () => visitorInputRef.current?.focus(),
+                        60,
+                      );
+                    }}
+                  >
+                    Send another
+                  </button>
+                </div>
+              ) : (
+                <form className="compose-box" onSubmit={handleVisitorSubmit}>
+                  <input
+                    type="text"
+                    name="website"
+                    value={honeypot}
+                    onChange={(event) => setHoneypot(event.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="honeypot-field"
+                  />
+                  <label htmlFor="visitor-note-input" className="sr-only">
+                    Send an anonymous note
+                  </label>
+                  <div className="compose-textarea-wrap">
+                    <textarea
+                      id="visitor-note-input"
+                      ref={visitorInputRef}
+                      className="compose-textarea"
+                      placeholder="Send an anonymous note to hang on this tree..."
+                      maxLength={500}
+                      value={noteBody}
+                      onChange={(event) => {
+                        const nextVal = event.target.value;
+                        setNoteBody(nextVal);
+                        writeVisitorDraft(activeHandle, nextVal);
+                        composeSubmitKeyRef.current = null;
+                        if (submitError) setSubmitError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          (event.ctrlKey || event.metaKey) &&
+                          event.key === "Enter" &&
+                          noteBody.trim().length > 0 &&
+                          !submittingNote
+                        ) {
+                          event.preventDefault();
+                          event.currentTarget.form?.requestSubmit();
+                        }
+                      }}
+                    />
+                    <div className="compose-corner-bar">
                       <button
-                        key={item.id}
+                        type="button"
+                        className="dice-btn"
+                        onClick={handleVisitorDice}
+                      >
+                        <Dices size={14} strokeWidth={2} aria-hidden="true" />
+                        <span>Idea</span>
+                      </button>
+                      <span className="char-counter">
+                        {noteBody.length}/500
+                      </span>
+                    </div>
+                  </div>
+                  <div className="compose-progress-track" aria-hidden="true">
+                    <div
+                      className={`compose-progress-fill ${
+                        noteBody.length >= 450 ? "is-near-limit" : ""
+                      }`}
+                      style={{
+                        width: `${Math.min(100, (noteBody.length / 500) * 100)}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <span className="section-label">
+                      Pick an ornament ({ORNAMENT_TYPES.length} styles)
+                    </span>
+                    <div
+                      className="ornament-strip"
+                      role="group"
+                      aria-label="Choose ornament style"
+                    >
+                      <button
                         type="button"
                         className="ornament-pill"
-                        aria-pressed={selectedOrnament === item.id}
-                        onClick={() => setSelectedOrnament(item.id)}
+                        aria-pressed={selectedOrnament === null}
+                        onClick={() => setSelectedOrnament(null)}
                       >
                         <span
                           className="ornament-pill-glyph"
                           aria-hidden="true"
                         >
-                          {item.glyph}
+                          ✨
                         </span>
-                        <span>{item.name}</span>
+                        <span>Surprise</span>
                       </button>
-                    ))}
+                      {ORNAMENT_TYPES.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="ornament-pill"
+                          aria-pressed={selectedOrnament === item.id}
+                          onClick={() => setSelectedOrnament(item.id)}
+                        >
+                          <span
+                            className="ornament-pill-glyph"
+                            aria-hidden="true"
+                          >
+                            {item.glyph}
+                          </span>
+                          <span>{item.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {submitError ? (
-                  <div className="error-box" role="alert">
-                    {submitError}
-                  </div>
-                ) : null}
+                  {submitError ? (
+                    <div className="error-box" role="alert">
+                      {submitError}
+                    </div>
+                  ) : null}
 
-                <button
-                  ref={visitorSubmitBtnRef}
-                  type="submit"
-                  className="primary-btn"
-                  disabled={noteBody.trim().length === 0 || submittingNote}
-                >
-                  {submittingNote
-                    ? "Hanging ornament..."
-                    : "Send anonymous note"}
-                </button>
+                  <button
+                    ref={visitorSubmitBtnRef}
+                    type="submit"
+                    className="primary-btn"
+                    disabled={noteBody.trim().length === 0 || submittingNote}
+                  >
+                    {submittingNote
+                      ? "Hanging ornament..."
+                      : "Send anonymous note"}
+                  </button>
 
-                <p className="anonymity-note">
-                  100% anonymous · No sign-in · Private to @{activeHandle}
-                </p>
-              </form>
-            )}
-          </>
-        )}
+                  <p className="anonymity-note">
+                    100% anonymous · No sign-in · Private to @{activeHandle}
+                  </p>
+                </form>
+              )}
+            </>
+          )}
 
-        <footer className="panel-footer">
-          <span className="credit-badge">
-            made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
-          </span>
-          <span className="inline-flex items-center gap-2 text-[11px] opacity-75">
-            <Link href="/privacy" className="hover:underline">
-              Privacy
-            </Link>
-            <span aria-hidden="true">·</span>
-            <Link href="/terms" className="hover:underline">
-              Terms
-            </Link>
-          </span>
-        </footer>
+          <footer className="panel-footer">
+            <span className="credit-badge">
+              made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
+            </span>
+            <span className="inline-flex items-center gap-2 text-[11px] opacity-75">
+              <Link href="/privacy" className="hover:underline">
+                Privacy
+              </Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/terms" className="hover:underline">
+                Terms
+              </Link>
+            </span>
+          </footer>
         </aside>
       </div>
 
@@ -2574,7 +2650,11 @@ export function HohoExperience({
                                 setInviteSheetOpen(true);
                               }}
                             >
-                              <Share2 size={15} strokeWidth={2} aria-hidden="true" />
+                              <Share2
+                                size={15}
+                                strokeWidth={2}
+                                aria-hidden="true"
+                              />
                               <span>Share to Story</span>
                             </button>
                             <div className="share-secondary-row">
@@ -2583,8 +2663,14 @@ export function HohoExperience({
                                 className="secondary-btn"
                                 onClick={handleCopyLink}
                               >
-                                <Copy size={14} strokeWidth={2} aria-hidden="true" />
-                                <span>{copiedLink ? "Copied" : "Copy Link"}</span>
+                                <Copy
+                                  size={14}
+                                  strokeWidth={2}
+                                  aria-hidden="true"
+                                />
+                                <span>
+                                  {copiedLink ? "Copied" : "Copy Link"}
+                                </span>
                               </button>
                               <button
                                 type="button"
@@ -2594,7 +2680,11 @@ export function HohoExperience({
                                   setMailOpen(true);
                                 }}
                               >
-                                <Mail size={14} strokeWidth={2} aria-hidden="true" />
+                                <Mail
+                                  size={14}
+                                  strokeWidth={2}
+                                  aria-hidden="true"
+                                />
                                 <span>Mail ({messages.length})</span>
                               </button>
                             </div>
@@ -2617,7 +2707,9 @@ export function HohoExperience({
                                   type="button"
                                   className="theme-swatch-btn"
                                   aria-pressed={config.themeId === item.id}
-                                  onClick={() => updateConfig({ themeId: item.id })}
+                                  onClick={() =>
+                                    updateConfig({ themeId: item.id })
+                                  }
                                 >
                                   <span
                                     className="theme-swatch-dot"
@@ -2632,7 +2724,10 @@ export function HohoExperience({
                         </div>
                       ) : (
                         <div className="edit-stack">
-                          <label htmlFor="mobile-owner-handle" className="section-label">
+                          <label
+                            htmlFor="mobile-owner-handle"
+                            className="section-label"
+                          >
                             Public handle
                           </label>
                           <div className="url-row">
@@ -2642,7 +2737,9 @@ export function HohoExperience({
                               className="social-input is-mono"
                               value={handleDraft}
                               maxLength={20}
-                              onChange={(event) => setHandleDraft(event.target.value)}
+                              onChange={(event) =>
+                                setHandleDraft(event.target.value)
+                              }
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") {
                                   event.preventDefault();
@@ -2653,12 +2750,17 @@ export function HohoExperience({
                             <button
                               type="button"
                               className="secondary-btn"
-                              onClick={() => void commitHandleChange(handleDraft)}
+                              onClick={() =>
+                                void commitHandleChange(handleDraft)
+                              }
                             >
                               Save
                             </button>
                           </div>
-                          <label htmlFor="mobile-owner-prompt" className="section-label">
+                          <label
+                            htmlFor="mobile-owner-prompt"
+                            className="section-label"
+                          >
                             Prompt question
                           </label>
                           <input
@@ -2678,7 +2780,8 @@ export function HohoExperience({
                     <div className="paused-banner">
                       <strong>Inbox paused</strong>
                       <span>
-                        @{activeHandle} has paused new anonymous notes right now.
+                        @{activeHandle} has paused new anonymous notes right
+                        now.
                       </span>
                       <Link href="/" className="make-tree-link">
                         Make your own tree →
@@ -2690,7 +2793,8 @@ export function HohoExperience({
                         Ornament hung on @{activeHandle}&apos;s tree!
                       </p>
                       <p className="anonymity-note">
-                        Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}.
+                        Sent anonymously as a{" "}
+                        {sentOrnamentMeta?.name ?? "Bauble"}.
                       </p>
                       <Link href="/" className="primary-btn celebrate-hero-cta">
                         <span>Get your own tree →</span>
@@ -2704,7 +2808,10 @@ export function HohoExperience({
                       </button>
                     </div>
                   ) : (
-                    <form className="compose-box" onSubmit={handleVisitorSubmit}>
+                    <form
+                      className="compose-box"
+                      onSubmit={handleVisitorSubmit}
+                    >
                       <label htmlFor="mobile-visitor-note" className="sr-only">
                         Send an anonymous note
                       </label>
@@ -2730,7 +2837,9 @@ export function HohoExperience({
                       <button
                         type="submit"
                         className="primary-btn"
-                        disabled={noteBody.trim().length === 0 || submittingNote}
+                        disabled={
+                          noteBody.trim().length === 0 || submittingNote
+                        }
                       >
                         {submittingNote
                           ? "Hanging ornament..."

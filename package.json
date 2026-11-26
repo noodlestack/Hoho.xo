@@ -8,7 +8,23 @@
     "start": "node scripts/prepare-standalone.mjs && cd .next/standalone && node server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:update": "playwright test --update-snapshots",
+    "lhci": "lhci autorun",
+    "analyze": "node -e \"require('node:child_process').execSync('pnpm build',{stdio:'inherit',env:{...process.env,ANALYZE:'true'}})\"",
+    "format": "prettier --write .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,mjs,json,css,md}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@gsap/react": "2.1.2",
@@ -27,6 +43,10 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.1",
+    "@lhci/cli": "0.16.1",
+    "@next/bundle-analyzer": "16.4.6",
+    "@playwright/test": "1.65.1",
     "@tailwindcss/turbopack": "4.3.5",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "26.6.6",
@@ -34,8 +54,14 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/web-push": "3.6.4",
+    "@vitest/coverage-v8": "5.1.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.2",
+    "prettier": "3.10.1",
+    "prettier-plugin-tailwindcss": "0.8.1",
     "tailwindcss": "4.3.5",
     "typescript": "6.0.3",
     "vitest": "5.1.1"
