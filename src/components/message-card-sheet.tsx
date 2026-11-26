@@ -10,8 +10,9 @@ import {
   type TreeMessage,
 } from "@/lib/messages";
 import {
-  downloadStoryCardPng,
   renderStoryCardDataUrl,
+  shareOrDownloadPngDataUrl,
+  STORY_REPLY_MAX_LENGTH,
   type StoryVibe,
 } from "@/lib/share-card";
 import { ORNAMENT_COLORS, ORNAMENT_TYPES } from "@/lib/tree-themes";
@@ -117,40 +118,19 @@ export function MessageCardSheet({
         reply: replyDraft,
         vibe,
       }));
-    if (
-      typeof navigator !== "undefined" &&
-      typeof navigator.share === "function" &&
-      typeof navigator.canShare === "function"
-    ) {
-      try {
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        const file = new File([blob], `hoho-xo-note-${message.seq}.png`, {
-          type: "image/png",
-        });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: "Hoho.xo anonymous note",
-            text: treeUrl,
-          });
-          setFeedback("Opened system share sheet.");
-          return;
-        }
-      } catch {
-        // Fall through to clean direct PNG download
-      }
-    }
-
-    const ok = await downloadStoryCardPng(message, treeUrl, {
-      displayName,
-      prompt,
-      reply: replyDraft,
-      vibe,
-    });
-    setFeedback(
-      ok ? "Downloaded 1080×1920 Story card PNG." : "Download failed.",
+    const outcome = await shareOrDownloadPngDataUrl(
+      dataUrl,
+      `hoho-xo-note-${message.seq}.png`,
+      "Hoho.xo anonymous note",
+      treeUrl,
     );
+    if (outcome === "shared") {
+      setFeedback("Opened system share sheet.");
+    } else if (outcome === "downloaded") {
+      setFeedback("Downloaded 1080×1920 Story card PNG.");
+    } else {
+      setFeedback("Share cancelled.");
+    }
   }
 
   return (
@@ -226,13 +206,14 @@ export function MessageCardSheet({
         {!isWrapped && (
           <div className="flex flex-col gap-2">
             <label htmlFor="story-reply-input" className="section-label m-0">
-              Add your reply for Story card (optional)
+              Add your reply for Story card (optional · {replyDraft.length}/
+              {STORY_REPLY_MAX_LENGTH})
             </label>
             <input
               id="story-reply-input"
               type="text"
               className="social-input"
-              maxLength={140}
+              maxLength={STORY_REPLY_MAX_LENGTH}
               placeholder="Write a quick reply for your IG Story card..."
               value={replyDraft}
               onChange={(event) => {

@@ -99,6 +99,12 @@ const MessageCardSheet = dynamic(
   { ssr: false },
 );
 
+const InviteStorySheet = dynamic(
+  () =>
+    import("@/components/invite-story-sheet").then((m) => m.InviteStorySheet),
+  { ssr: false },
+);
+
 export type ExperienceMode = "owner" | "visitor";
 
 interface HohoExperienceProps {
@@ -151,6 +157,7 @@ export function HohoExperience({
   const [latestDroppedId, setLatestDroppedId] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [inviteSheetOpen, setInviteSheetOpen] = useState<boolean>(false);
 
   const [noteBody, setNoteBody] = useState<string>("");
   const [honeypot, setHoneypot] = useState<string>("");
@@ -903,19 +910,6 @@ export function HohoExperience({
     );
   }, [activeHandle, shareUrl, showToast, theme]);
 
-  const handleDownloadInvite = useCallback(async () => {
-    const { downloadInviteStoryCardPng } = await import("@/lib/share-card");
-    const ok = await downloadInviteStoryCardPng(shareUrl, theme, {
-      handle: activeHandle,
-      displayName: config.displayName,
-      prompt: config.prompt,
-    });
-    showToast(
-      ok ? "Downloaded 1080×1920 IG Story Invite" : "Story invite export failed",
-      ok ? "success" : "error",
-    );
-  }, [activeHandle, config.displayName, config.prompt, shareUrl, showToast, theme]);
-
   const handleCycleOwnerPrompt = useCallback(() => {
     const nextIdx = (ownerPromptIdx + 1) % OWNER_PROMPT_PRESETS.length;
     setOwnerPromptIdx(nextIdx);
@@ -1601,7 +1595,7 @@ export function HohoExperience({
                   <button
                     type="button"
                     className="primary-btn"
-                    onClick={() => void handleDownloadInvite()}
+                    onClick={() => setInviteSheetOpen(true)}
                   >
                     <Share2 size={15} strokeWidth={2} aria-hidden="true" />
                     <span>Share to Story</span>
@@ -2330,6 +2324,26 @@ export function HohoExperience({
             onClose={() => setActiveMessageId(null)}
             onDelete={handleDeleteMessage}
             onReport={handleReportMessage}
+          />
+          <InviteStorySheet
+            open={inviteSheetOpen}
+            treeUrl={shareUrl}
+            theme={theme}
+            config={{
+              handle: activeHandle,
+              displayName: config.displayName,
+              prompt: config.prompt,
+            }}
+            onClose={() => setInviteSheetOpen(false)}
+            onResult={(outcome) => {
+              if (outcome === "shared") {
+                showToast("Opened Story share sheet");
+              } else if (outcome === "downloaded") {
+                showToast("Downloaded 1080×1920 IG Story Invite");
+              } else {
+                showToast("Story invite share cancelled", "info");
+              }
+            }}
           />
         </>
       ) : null}

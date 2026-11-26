@@ -131,6 +131,65 @@ function wrapParagraphs(
 }
 
 export type StoryVibe = "night" | "pine" | "ember" | "blush";
+export type InviteTemplateId = "minimal" | "big-prompt" | "qr-forward";
+
+export const INVITE_TEMPLATES: ReadonlyArray<{
+  id: InviteTemplateId;
+  label: string;
+  caption: string;
+}> = [
+  { id: "qr-forward", label: "QR Forward", caption: "Scannable QR + prompt" },
+  { id: "big-prompt", label: "Big Prompt", caption: "Editorial NGL headline" },
+  { id: "minimal", label: "Minimal", caption: "Quiet luxury card" },
+];
+
+export const STORY_REPLY_MAX_LENGTH = 140;
+
+export function clampStoryReply(reply?: string): string {
+  return (reply ?? "").trim().slice(0, STORY_REPLY_MAX_LENGTH);
+}
+
+export async function shareOrDownloadPngDataUrl(
+  dataUrl: string,
+  filename: string,
+  title: string,
+  text?: string,
+): Promise<"shared" | "downloaded" | "failed"> {
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function"
+  ) {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title,
+          ...(text ? { text } : {}),
+        });
+        return "shared";
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return "failed";
+      }
+      // Fall through cleanly to direct PNG download
+    }
+  }
+
+  try {
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = filename;
+    link.click();
+    return "downloaded";
+  } catch {
+    return "failed";
+  }
+}
 
 export interface StoryCardOptions {
   displayName?: string;
@@ -258,8 +317,9 @@ export async function renderStoryCardDataUrl(
     210,
   );
 
-  // Optional NGL-style Prompt Ribbon
-  const hasReply = Boolean(options.reply?.trim());
+  // Optional NGL-style Prompt Ribbon (never renders message timestamps or sender identity)
+  const clampedReply = clampStoryReply(options.reply);
+  const hasReply = Boolean(clampedReply);
   let cardTopY = 264;
   if (options.prompt?.trim()) {
     ctx.fillStyle = "#C9C4BA";
@@ -317,7 +377,7 @@ export async function renderStoryCardDataUrl(
   }
 
   // NGL-style Owner Reply Bubble below the note
-  if (hasReply && options.reply) {
+  if (hasReply) {
     const replyY = cardY + cardH + 34;
     const replyH = 220;
     ctx.fillStyle = "#181C26";
@@ -332,7 +392,7 @@ export async function renderStoryCardDataUrl(
 
     ctx.fillStyle = "#F2EDE4";
     ctx.font = '400 42px "Instrument Serif", Georgia, serif';
-    const replyLines = wrapParagraphs(ctx, options.reply.trim(), cardW - 100).slice(0, 3);
+    const replyLines = wrapParagraphs(ctx, clampedReply, cardW - 100).slice(0, 3);
     replyLines.forEach((line, idx) => {
       ctx.fillText(line, width / 2, replyY + 98 + idx * 48);
     });
@@ -376,6 +436,7 @@ export async function renderInviteStoryCardDataUrl(
   treeUrl: string,
   theme: TreeTheme,
   config: Pick<TreeConfig, "handle" | "displayName" | "prompt">,
+  template: InviteTemplateId = "qr-forward",
 ): Promise<string> {
   if (typeof document !== "undefined" && document.fonts) {
     await document.fonts.ready;
@@ -389,27 +450,40 @@ export async function renderInviteStoryCardDataUrl(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context unavailable");
 
-  // Night sky background
+  // Night sky background with warm ambient radial wash above the link-sticker zone
   ctx.fillStyle = "#0B0D12";
+  ctx.fillRect(0, 0, width, height);
+
+  const skyGlow = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.28,
+    30,
+    width * 0.5,
+    height * 0.28,
+    680,
+  );
+  skyGlow.addColorStop(0, `${theme.swatch}28`);
+  skyGlow.addColorStop(1, "rgba(11, 13, 18, 0)");
+  ctx.fillStyle = skyGlow;
   ctx.fillRect(0, 0, width, height);
 
   ctx.strokeStyle = "#232834";
   ctx.lineWidth = 3;
-  ctx.strokeRect(56, 56, width - 112, height - 112);
+  drawRoundedRect(ctx, 56, 56, width - 112, height - 112, 48);
+  ctx.stroke();
 
-  // Subtle themed ASCII tree motif behind QR
+  // Subtle ASCII motif placed gently near lower footer so center-lower sticker zone stays clear
   ctx.save();
-  ctx.globalAlpha = 0.22;
+  ctx.globalAlpha = template === "minimal" ? 0.1 : 0.16;
   ctx.fillStyle = theme.qrDark;
-  ctx.font = '600 42px "JetBrains Mono", monospace';
+  ctx.font = '600 32px "JetBrains Mono", monospace';
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ASCII_MOTIF.forEach((row, index) => {
-    ctx.fillText(row, width / 2, 1185 + index * 46);
+  ASCII_MOTIF.slice(0, 6).forEach((row, index) => {
+    ctx.fillText(row, width / 2, 1455 + index * 36);
   });
   ctx.restore();
 
-  // Header & NGL Hook Prompt
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = theme.swatch;
@@ -417,59 +491,100 @@ export async function renderInviteStoryCardDataUrl(
   ctx.fillText(
     `★  @${config.handle.toUpperCase()} · ${theme.label.toUpperCase()} TREE  ★`,
     width / 2,
-    170,
+    158,
   );
 
   ctx.fillStyle = "#F2EDE4";
-  ctx.font = '700 44px "JetBrains Mono", monospace';
-  ctx.fillText(config.displayName.slice(0, 32), width / 2, 236);
+  ctx.font = '700 42px "JetBrains Mono", monospace';
+  ctx.fillText((config.displayName || `@${config.handle}`).slice(0, 32), width / 2, 224);
 
-  // Prompt Box
-  ctx.fillStyle = "#12151C";
-  ctx.fillRect(112, 296, width - 224, 240);
-  ctx.strokeStyle = "#32394A";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(112, 296, width - 224, 240);
+  const drawEmbeddedQr = (qrBoxSize: number, qrY: number) => {
+    const { modules } = QRCode.create(treeUrl, { errorCorrectionLevel: "M" });
+    const n = modules.size;
+    const quiet = 4;
+    const qrX = (width - qrBoxSize) / 2;
+    const cell = qrBoxSize / (n + quiet * 2);
 
-  ctx.fillStyle = "#F2EDE4";
-  ctx.font = '400 54px "Instrument Serif", Georgia, serif';
-  const promptLines = wrapParagraphs(ctx, config.prompt, width - 300).slice(0, 3);
-  const pStartY = 416 - ((promptLines.length - 1) * 64) / 2;
-  promptLines.forEach((line, idx) => {
-    ctx.fillText(line, width / 2, pStartY + idx * 64);
-  });
+    ctx.fillStyle = "#0B0D12";
+    drawRoundedRect(ctx, qrX, qrY, qrBoxSize, qrBoxSize, 24);
+    ctx.fill();
+    ctx.strokeStyle = theme.swatch;
+    ctx.lineWidth = 3;
+    ctx.stroke();
 
-  // Embedded scannable dark-canvas QR inside clean 4-module quiet zone
-  const { modules } = QRCode.create(treeUrl, { errorCorrectionLevel: "M" });
-  const n = modules.size;
-  const quiet = 4;
-  const qrBoxSize = 540;
-  const qrX = (width - qrBoxSize) / 2;
-  const qrY = 606;
-  const cell = qrBoxSize / (n + quiet * 2);
+    const isFinderCell = (r: number, c: number) =>
+      (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
 
-  ctx.fillStyle = "#0B0D12";
-  ctx.fillRect(qrX, qrY, qrBoxSize, qrBoxSize);
-  ctx.strokeStyle = theme.swatch;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(qrX, qrY, qrBoxSize, qrBoxSize);
-
-  const isFinderCell = (r: number, c: number) =>
-    (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
-
-  for (let r = 0; r < n; r += 1) {
-    for (let c = 0; c < n; c += 1) {
-      if (!modules.data[r * n + c]) continue;
-      ctx.fillStyle = isFinderCell(r, c) ? theme.qrFinder : theme.qrDark;
-      const x = Math.floor(qrX + (c + quiet) * cell);
-      const y = Math.floor(qrY + (r + quiet) * cell);
-      const w = Math.ceil(qrX + (c + quiet + 1) * cell) - x;
-      const h = Math.ceil(qrY + (r + quiet + 1) * cell) - y;
-      ctx.fillRect(x, y, w, h);
+    for (let r = 0; r < n; r += 1) {
+      for (let c = 0; c < n; c += 1) {
+        if (!modules.data[r * n + c]) continue;
+        ctx.fillStyle = isFinderCell(r, c) ? theme.qrFinder : theme.qrDark;
+        const x = Math.floor(qrX + (c + quiet) * cell);
+        const y = Math.floor(qrY + (r + quiet) * cell);
+        const w = Math.ceil(qrX + (c + quiet + 1) * cell) - x;
+        const h = Math.ceil(qrY + (r + quiet + 1) * cell) - y;
+        ctx.fillRect(x, y, w, h);
+      }
     }
+  };
+
+  if (template === "big-prompt") {
+    // Bold NGL editorial prompt headline + compact QR above link-sticker safe zone
+    ctx.fillStyle = "rgba(18, 22, 32, 0.9)";
+    drawRoundedRect(ctx, 100, 290, width - 200, 390, 36);
+    ctx.fill();
+    ctx.strokeStyle = `${theme.swatch}88`;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "#F2EDE4";
+    ctx.font = '400 68px "Instrument Serif", Georgia, serif';
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 290).slice(0, 4);
+    const pStartY = 485 - ((promptLines.length - 1) * 78) / 2;
+    promptLines.forEach((line, idx) => {
+      ctx.fillText(line, width / 2, pStartY + idx * 78);
+    });
+
+    drawEmbeddedQr(310, 725);
+  } else if (template === "minimal") {
+    // Minimal hairline prompt + crisp medium QR in upper half, open quiet center below
+    ctx.fillStyle = "rgba(18, 22, 32, 0.72)";
+    drawRoundedRect(ctx, 128, 290, width - 256, 230, 30);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#F2EDE4";
+    ctx.font = '400 50px "Instrument Serif", Georgia, serif';
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 340).slice(0, 3);
+    const pStartY = 405 - ((promptLines.length - 1) * 58) / 2;
+    promptLines.forEach((line, idx) => {
+      ctx.fillText(line, width / 2, pStartY + idx * 58);
+    });
+
+    drawEmbeddedQr(380, 575);
+  } else {
+    // qr-forward: large scannable QR card in upper-middle, lower-middle kept quiet for link sticker
+    ctx.fillStyle = "#12151C";
+    drawRoundedRect(ctx, 112, 274, width - 224, 210, 28);
+    ctx.fill();
+    ctx.strokeStyle = "#32394A";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#F2EDE4";
+    ctx.font = '400 50px "Instrument Serif", Georgia, serif';
+    const promptLines = wrapParagraphs(ctx, config.prompt, width - 300).slice(0, 3);
+    const pStartY = 379 - ((promptLines.length - 1) * 58) / 2;
+    promptLines.forEach((line, idx) => {
+      ctx.fillText(line, width / 2, pStartY + idx * 58);
+    });
+
+    drawEmbeddedQr(490, 525);
   }
 
-  // Call to action + link sticker guide
+  // Lower-middle area (y ~1080..1380) intentionally left calm and clear for IG/TikTok link stickers
   ctx.fillStyle = "#F5C451";
   ctx.font = '600 28px "JetBrains Mono", monospace';
   ctx.fillText("SCAN QR OR TAP MY LINK STICKER", width / 2, 1696);
@@ -490,12 +605,18 @@ export async function downloadInviteStoryCardPng(
   treeUrl: string,
   theme: TreeTheme,
   config: Pick<TreeConfig, "handle" | "displayName" | "prompt">,
+  template: InviteTemplateId = "qr-forward",
 ): Promise<boolean> {
   try {
-    const dataUrl = await renderInviteStoryCardDataUrl(treeUrl, theme, config);
+    const dataUrl = await renderInviteStoryCardDataUrl(
+      treeUrl,
+      theme,
+      config,
+      template,
+    );
     const link = document.createElement("a");
     link.href = dataUrl;
-    link.download = `hoho-xo-${config.handle}-story-invite.png`;
+    link.download = `hoho-xo-${config.handle}-story-${template}.png`;
     link.click();
     return true;
   } catch {

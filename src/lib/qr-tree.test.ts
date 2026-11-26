@@ -41,6 +41,11 @@ import {
   ORNAMENT_TYPES,
   TREE_THEME_LIST,
 } from "./tree-themes";
+import {
+  clampStoryReply,
+  INVITE_TEMPLATES,
+  STORY_REPLY_MAX_LENGTH,
+} from "./share-card";
 
 describe("createQrMatrix", () => {
   it("creates a QR matrix with grid for a normal link", () => {
@@ -307,5 +312,21 @@ describe("parseHandle strict validation", () => {
       expect(parseHandle(reserved)).toBeNull();
       expect(parseHandle(`@${reserved.toUpperCase()}`)).toBeNull();
     }
+  });
+});
+
+describe("Story card templates & privacy", () => {
+  it("exposes the 3 invite Story templates", () => {
+    expect(INVITE_TEMPLATES.map((t) => t.id)).toEqual([
+      "qr-forward",
+      "big-prompt",
+      "minimal",
+    ]);
+  });
+
+  it("clamps owner replies to 140 chars and trims whitespace", () => {
+    expect(STORY_REPLY_MAX_LENGTH).toBe(140);
+    expect(clampStoryReply("  thank you!  ")).toBe("thank you!");
+    expect(clampStoryReply("a".repeat(220))).toHaveLength(140);
   });
 });
