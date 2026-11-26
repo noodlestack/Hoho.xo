@@ -92,6 +92,12 @@ export const OWNER_PROMPT_PRESETS: string[] = [
   "Say it without signing your name. I'll answer on IG.",
   "Anong wishlist mo para sa'kin bago mag-Dec 25?",
   "Leave a little kindness or mild chaos on my tree ✨",
+  "Drop a quick 'Kamusta?' or honest note bago mag-New Year.",
+  "Bawal ma-shy — isang anonymous wish o confession lang 🎄",
+  "Sinong kanta ang pinaka-bagay sa'kin? Drop it anonymously.",
+  "Kung may isang bagay ka pang gustong sabihin sa'kin this 2026...",
+  "Rate our 2026 friendship or leave a Christmas chika ✨",
+  "No names, pure vibes lang — hang a note on my tree!",
 ];
 
 export const VISITOR_IDEA_PROMPTS: string[] = [

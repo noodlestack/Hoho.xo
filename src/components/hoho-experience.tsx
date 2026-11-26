@@ -159,6 +159,14 @@ export function HohoExperience({
   const [submitError, setSubmitError] = useState<string>("");
   const [visitorSentOrnament, setVisitorSentOrnament] =
     useState<TreeMessage | null>(null);
+  const [flyingOrnament, setFlyingOrnament] = useState<{
+    glyph: string;
+    color: string;
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+  } | null>(null);
   const [ownerPromptIdx, setOwnerPromptIdx] = useState<number>(0);
   const [visitorIdeaIdx, setVisitorIdeaIdx] = useState<number>(0);
 
@@ -169,6 +177,8 @@ export function HohoExperience({
   const shortcutsWrapRef = useRef<HTMLDivElement | null>(null);
   const visitorCardRef = useRef<HTMLElement | null>(null);
   const visitorInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const visitorSubmitBtnRef = useRef<HTMLButtonElement | null>(null);
+  const flyingOrnamentRef = useRef<HTMLDivElement | null>(null);
   const hydratedRef = useRef<boolean>(false);
   const activeHandleRef = useRef<string>(initialSafeHandle);
   const serverSyncedRef = useRef<boolean>(Boolean(initialVisitorTree));
@@ -616,6 +626,49 @@ export function HohoExperience({
     { scope: visitorCardRef, dependencies: [reducedMotion] },
   );
 
+  useEffect(() => {
+    const el = flyingOrnamentRef.current;
+    if (!flyingOrnament || !el || reducedMotion) return;
+
+    const midX = (flyingOrnament.fromX + flyingOrnament.toX) * 0.5;
+    const midY =
+      Math.min(flyingOrnament.fromY, flyingOrnament.toY) - 64;
+
+    const tween = gsap
+      .timeline({
+        onComplete: () => setFlyingOrnament(null),
+      })
+      .fromTo(
+        el,
+        {
+          x: flyingOrnament.fromX,
+          y: flyingOrnament.fromY,
+          scale: 0.9,
+          opacity: 1,
+        },
+        {
+          x: midX,
+          y: midY,
+          scale: 1.45,
+          opacity: 1,
+          duration: 0.55,
+          ease: "power2.out",
+        },
+      )
+      .to(el, {
+        x: flyingOrnament.toX,
+        y: flyingOrnament.toY,
+        scale: 1.05,
+        opacity: 0.15,
+        duration: 0.55,
+        ease: "power3.inOut",
+      });
+
+    return () => {
+      tween.kill();
+    };
+  }, [flyingOrnament, reducedMotion]);
+
   const persistMessagesLocal = useCallback(
     (updater: (prev: TreeMessage[]) => TreeMessage[]) => {
       setMessages((prev) => {
@@ -1007,6 +1060,29 @@ export function HohoExperience({
           setMessages((prev) => [...prev, placed]);
           setVisitorSentOrnament(placed);
           setLatestDroppedId(placed.id);
+
+          if (!reducedMotion && typeof window !== "undefined") {
+            const btnRect =
+              visitorSubmitBtnRef.current?.getBoundingClientRect();
+            const canvasRect = document
+              .querySelector(".tree-canvas")
+              ?.getBoundingClientRect();
+            if (btnRect && canvasRect) {
+              const glyphMeta =
+                ORNAMENT_TYPES[placed.ornamentType] ?? ORNAMENT_TYPES[0];
+              const glyphColor =
+                ORNAMENT_COLORS[placed.colorIdx % ORNAMENT_COLORS.length] ??
+                "#F5C451";
+              setFlyingOrnament({
+                glyph: glyphMeta.glyph,
+                color: glyphColor,
+                fromX: btnRect.left + btnRect.width / 2,
+                fromY: btnRect.top + btnRect.height / 2,
+                toX: canvasRect.left + canvasRect.width / 2,
+                toY: canvasRect.top + canvasRect.height * 0.34,
+              });
+            }
+          }
         }
         if (typeof data.totalVisible === "number") {
           setPublicTotalVisible(data.totalVisible);
@@ -2066,9 +2142,12 @@ export function HohoExperience({
                   Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}.
                   Only @{activeHandle} can unwrap it in Mail.
                 </p>
+                <Link href="/" className="primary-btn celebrate-hero-cta">
+                  <span>Get your own tree →</span>
+                </Link>
                 <button
                   type="button"
-                  className="primary-btn"
+                  className="secondary-btn celebrate-again-btn"
                   onClick={() => {
                     setVisitorSentOrnament(null);
                     window.setTimeout(
@@ -2077,11 +2156,8 @@ export function HohoExperience({
                     );
                   }}
                 >
-                  Send another note
+                  Send another
                 </button>
-                <Link href="/" className="make-tree-link">
-                  Make your own anonymous tree →
-                </Link>
               </div>
             ) : (
               <form className="compose-box" onSubmit={handleVisitorSubmit}>
@@ -2195,6 +2271,7 @@ export function HohoExperience({
                 ) : null}
 
                 <button
+                  ref={visitorSubmitBtnRef}
                   type="submit"
                   className="primary-btn"
                   disabled={noteBody.trim().length === 0 || submittingNote}
@@ -2255,6 +2332,19 @@ export function HohoExperience({
             onReport={handleReportMessage}
           />
         </>
+      ) : null}
+      {flyingOrnament && !reducedMotion ? (
+        <div
+          ref={flyingOrnamentRef}
+          className="flying-ornament"
+          style={{
+            color: flyingOrnament.color,
+            borderColor: flyingOrnament.color,
+          }}
+          aria-hidden="true"
+        >
+          {flyingOrnament.glyph}
+        </div>
       ) : null}
     </div>
   );

@@ -1461,6 +1461,46 @@ select:focus-visible {
   color: var(--text);
 }
 
+.celebrate-hero-cta {
+  text-decoration: none;
+}
+
+.celebrate-again-btn {
+  align-self: center;
+  width: auto;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.celebrate-again-btn:hover {
+  color: var(--text);
+}
+
+.flying-ornament {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 95;
+  width: 38px;
+  height: 38px;
+  margin-left: -19px;
+  margin-top: -19px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: rgba(11, 13, 18, 0.92);
+  box-shadow: 0 0 24px rgba(245, 196, 81, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono), monospace;
+  font-size: 1.1rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+
 /* Edit Stack */
 .edit-stack {
   display: flex;
