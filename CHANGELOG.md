@@ -2,21 +2,23 @@
 
 All notable changes to **Hoho.xo** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Polish, Motion & Hardening
+## [Unreleased] — Polish, Craft, Accessibility & QA Hardening
 
 ### Added
-- **3D Tree Volumetric Rendering**: Orbiting 24s Lambert light shading, single-hue glyph luminance ramps, sparse lights (`<= 7%`), continuous helical garland, gentle height-dependent wind sway, elliptical ground glow, and larger optical framing.
-- **Jewel Ornaments & Arrival Physics**: High-contrast backing disks, top-left specular dots, hover focus rings, smooth 120ms tooltips, `-120px` arrival drop bounce + landing flash, 2.2s `±7°` hanger pendulum swing, and live unread pill tick animations.
-- **GSAP Choreography & Radial QR Morph**: Skippable 1.4s bottom-to-top tree grow timeline (`gsap`), `SplitText` prompt reveal, stat count-ups, and `<= 1.2s` radial centre-out QR morph waves (`power2.inOut`).
-- **Visitor Loop & Story Templates**: 6 Taglish/Filipino prompt presets, GSAP flying ornament send-arc, send haptics (`navigator.vibrate`), `"Get your own tree →"` celebration hero CTA, and `InviteStorySheet` with 3 `1080×1920` Story invite templates (`QR Forward`, `Big Prompt`, `Minimal`) plus Web Share API fallback.
-- **Owner Web Push (`after()` Coalescing)**: `/api/trees/[handle]/push` (`GET`/`POST`/`DELETE`), `public/sw.js`, 5-device cap, 1/min coalescing, generic privacy-preserving notifications, and iOS standalone guidance.
-- **Mobile Vaul Bottom Sheet & PWA Assets**: Draggable bottom sheet below `768px` leaving `>= 58%` viewport height for the tree, plus crisp `192×192`, `512×512`, and `180×180` raster PWA icons and `public/audio/LICENSES.md` CC0 buffer loader.
-- **Repository Presentation**: Banner (`1600×600`), social preview (`1280×640`), `1280×800` hero `demo.gif`/`demo.mp4`, updated desktop/mobile screenshots, `SECURITY.md`, and `docs/presentation.md`.
 
-### Security & Hardening
-- Replaced permissive handle fallback with strict 3–20 char `parseHandle` validation and 404/reject behavior on reserved or invalid handles.
-- Replaced monolithic read-modify-write storage with atomic store adapters (`KvTreeStore` on `hoho:v2:*`, mutex-guarded `FileTreeStore`, and `MemoryTreeStore`) preventing concurrent lost updates and claim races.
-- Added fail-closed (`503`) Upstash sliding-window rate limiting with HMAC-SHA256 IP hashing (`HOHO_IP_SALT`, `HOHO_TRUSTED_PROXY`), `Idempotency-Key` deduplication, strict `__Host-` `HttpOnly` owner cookies (never stored in `localStorage`), same-origin CSRF checks (`Origin`/`Referer`), and tightened `next.config.ts` CSP/HSTS headers.
+- **Vector Jewel Ornaments & 5-Point Star Topper**: Pre-rendered DPR-aware jewel ornament sprites (`src/lib/ornament-sprites.ts`) with `<OrnamentSpriteIcon />` UI thumbnails, `>= 24px` touch hit targets, and a glowing 5-point vector star topper with optional cosmetic Golden Star Supporter halo.
+- **Classic Palette & Adaptive Canvas Rendering**: Switched default palette to high-contrast Classic pine + warm gold + midnight, blue-noise Fibonacci foliage (`>= 85%` density), 120 atmosphere particles, and automatic quality-tier stepping (`high` → `medium` → `low`) with `?debug=1` HUD.
+- **Mail Inbox Filters, Handwriting & Swipe Deck**: Added 5 filter tabs (`All / Unread / Replied / Starred / Reported`), persisted `starred` and `repliedAt` flags, `Caveat` handwriting card toggle, GSAP `Flip` unwrap transition, pointer swipe deck navigation, and visibility-aware polling backoff.
+- **Expanded Story Studio**: Added 6 templates (`QR Forward`, `Big Prompt`, `Minimal`, `Polaroid`, `Receipt`, `Sticker`) across `9:16`, `4:5`, and `1:1` formats, Instagram Safe Zone overlay toggle, link-in-bio guide, and 3-second `.webm` Reel clip export.
+- **Ethical Owner Support Dialog**: Added optional Owner Studio `SupportSheet` (zero presence on `/t/[handle]`, zero message paywalls) with strict HTTPS link allowlisting and timing-safe `HOHO_SUPPORTER_CODES` unlock flow.
+- **PWA Offline Experience & QA Suite**: Added `public/offline.html`, static/push-only `public/sw.js` bypassing `/api/*`, Playwright E2E + `axe-core` accessibility + visual snapshot tests, ESLint `jsx-a11y`, Lighthouse CI budgets, `.nvmrc`, `CONTRIBUTING.md`, and GitHub issue/PR templates.
 
-### Accessibility & Contrast
-- Verified WCAG AA contrast (`--text-dim` 8.57:1, `--text-faint` 6.46:1 on `--bg-surface`), keyboard focus rings, Vaul Escape/focus handling, canvas `aria-label`, and `prefers-reduced-motion` across all animations.
+### Changed
+
+- **Modular Architecture (< 600 Lines)**: Split monolithic `globals.css`, `ascii-tree-canvas.tsx`, and `hoho-experience.tsx` into ordered partials under `src/app/styles/`, canvas renderers under `src/components/tree/`, and hooks/panels under `src/components/hoho/`.
+- **Exact Dependency Pins**: Pinned runtime and dev dependencies cleanly with verified `pnpm install --frozen-lockfile`.
+
+### Security & Privacy
+
+- Preserved strict visitor anonymity on SSR `/t/[handle]` and `GET /api/trees/[handle]`: zero message bodies, read/starred/replied flags, muted words, or sender metadata are ever exposed.
+- Enforced `HttpOnly` `__Host-` owner cookies, same-origin CSRF checks, fail-closed (`503`) Upstash KV rate limits, and static-only Service Worker caching (never caching `/api/*`).

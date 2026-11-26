@@ -1,0 +1,19 @@
+name: Feature Request
+description: Suggest a theme, ornament, Story template, or UX enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Idea
+      description: What part of Owner Studio, Visitor Composer, QR Mode, or Story sharing would this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Design
+      description: Share layout notes, theme palette, or interaction details. Note that Hoho.xo keeps notes anonymous and ungated.
+    validations:
+      required: true
