@@ -3,16 +3,19 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Notice — Hoho.xo",
+  description:
+    "How Hoho.xo protects visitor anonymity, salted IP rate-limit hashes, HttpOnly owner cookies, and tree storage.",
+  alternates: { canonical: "/privacy" },
   robots: { index: true, follow: true },
 };
 
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 font-sans text-sm leading-relaxed text-[#F6F2E9]">
-      <p className="mb-3 inline-block rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs uppercase tracking-wide text-amber-200">
+      <p className="mb-3 inline-block rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs tracking-wide text-amber-200 uppercase">
         DRAFT, pending legal review
       </p>
-      <h1 className="mb-6 font-display text-3xl tracking-tight">
+      <h1 className="font-display mb-6 text-3xl tracking-tight">
         Hoho.xo Privacy Notice
       </h1>
 
@@ -26,8 +29,8 @@ export default function PrivacyPage() {
             collect sign-ins from visitors or provide sender-identity hints,
             sender analytics, or reveal features. However, notes and transport
             requests pass through this service and its underlying hosting and
-            database providers (such as Vercel and Upstash, depending on how this
-            instance is deployed).
+            database providers (such as Vercel and Upstash, depending on how
+            this instance is deployed).
           </p>
         </div>
 
@@ -48,10 +51,10 @@ export default function PrivacyPage() {
             Data storage and deletion
           </h2>
           <p>
-            Tree configuration and submitted notes remain stored in the configured
-            backend until the tree owner deletes individual notes from Mail or
-            the operator clears storage. Public tree responses omit message
-            bodies, read timestamps, and muted word lists.
+            Tree configuration and submitted notes remain stored in the
+            configured backend until the tree owner deletes individual notes
+            from Mail or the operator clears storage. Public tree responses omit
+            message bodies, read timestamps, and muted word lists.
           </p>
         </div>
 
@@ -62,8 +65,8 @@ export default function PrivacyPage() {
           <p>
             Local safety checks run before saving notes. If the operator enables
             optional third-party moderation on this instance, submitted note
-            text is sent to OpenAI&apos;s moderation endpoint strictly for safety
-            classification.
+            text is sent to OpenAI&apos;s moderation endpoint strictly for
+            safety classification.
           </p>
         </div>
 

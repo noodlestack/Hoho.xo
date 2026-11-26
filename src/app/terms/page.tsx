@@ -3,16 +3,19 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Hoho.xo",
+  description:
+    "Hoho.xo terms of use, acceptable anonymous messaging rules, owner access keys, and retention policy.",
+  alternates: { canonical: "/terms" },
   robots: { index: true, follow: true },
 };
 
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 font-sans text-sm leading-relaxed text-[#F6F2E9]">
-      <p className="mb-3 inline-block rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs uppercase tracking-wide text-amber-200">
+      <p className="mb-3 inline-block rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs tracking-wide text-amber-200 uppercase">
         DRAFT, pending legal review
       </p>
-      <h1 className="mb-6 font-display text-3xl tracking-tight">
+      <h1 className="font-display mb-6 text-3xl tracking-tight">
         Hoho.xo Terms of Service
       </h1>
 
@@ -33,8 +36,8 @@ export default function TermsPage() {
           </h2>
           <p>
             Do not send threats, harassment, doxxing, phone numbers, email
-            addresses, malicious links, or sexually explicit content. Notes
-            must only represent real human submissions; automated spamming or
+            addresses, malicious links, or sexually explicit content. Notes must
+            only represent real human submissions; automated spamming or
             flooding is prohibited.
           </p>
         </div>

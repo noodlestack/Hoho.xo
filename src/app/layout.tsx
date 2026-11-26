@@ -8,6 +8,7 @@ import {
 } from "next/font/google";
 import { Toaster } from "sonner";
 import { SwRegister } from "@/components/sw-register";
+import { getSiteOriginString, getSiteOriginUrl } from "@/lib/site-origin";
 import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({
@@ -39,32 +40,30 @@ const handwriting = Caveat({
   display: "swap",
 });
 
-const siteUrl = (() => {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured) {
-    try {
-      const parsed = new URL(configured);
-      if (
-        parsed.hostname !== "your-domain.example" &&
-        parsed.origin !== "https://hoho.xo"
-      ) {
-        return parsed;
-      }
-    } catch {
-      // Ignore invalid URL
-    }
-  }
-  return process.env.NODE_ENV !== "production"
-    ? new URL("http://localhost:3000")
-    : undefined;
-})();
+const siteUrl = getSiteOriginUrl();
+const googleSiteVerification =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim() || undefined;
 
 export const metadata: Metadata = {
-  ...(siteUrl ? { metadataBase: siteUrl } : {}),
+  metadataBase: siteUrl,
   title: "Hoho.xo — Anonymous Christmas Tree & QR Notes",
   description:
     "Share a 3D ASCII Christmas tree link in your bio or Story. Friends send anonymous notes that hang as ornaments.",
+  keywords: [
+    "Hoho.xo",
+    "anonymous notes",
+    "Christmas tree bio link",
+    "ASCII Christmas tree",
+    "QR bio link",
+    "holiday Q&A",
+  ],
   authors: [{ name: "noodlestack" }],
+  alternates: {
+    canonical: "/",
+  },
+  ...(googleSiteVerification
+    ? { verification: { google: googleSiteVerification } }
+    : {}),
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -87,6 +86,7 @@ export const metadata: Metadata = {
     title: "Hoho.xo — Anonymous Christmas Tree & QR Notes",
     description:
       "Share a 3D ASCII Christmas tree link in your bio or Story. Friends send anonymous notes that hang as ornaments.",
+    url: "/",
     siteName: "Hoho.xo",
     type: "website",
   },
@@ -107,12 +107,39 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Hoho.xo",
+    url: getSiteOriginString(),
+    description:
+      "Share a 3D ASCII Christmas tree link in your bio or Story. Friends send anonymous notes that hang as ornaments.",
+    applicationCategory: "SocialNetworkingApplication",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    author: {
+      "@type": "Person",
+      name: "noodlestack",
+      url: "https://github.com/noodlestack",
+    },
+  };
+
   return (
     <html
       lang="en"
       className={`${sans.variable} ${display.variable} ${mono.variable} ${handwriting.variable}`}
     >
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+          }}
+        />
         <SwRegister />
         {children}
         <Toaster

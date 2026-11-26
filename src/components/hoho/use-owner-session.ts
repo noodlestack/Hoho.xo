@@ -146,8 +146,6 @@ export function useOwnerSession({
 
       const localFallbackCfg: TreeConfig = { ...config, handle: nextHandle };
       resetMailTracking();
-      saveActiveOwnerHandle(nextHandle);
-      saveTreeConfig(nextHandle, localFallbackCfg);
       setActiveHandle(nextHandle);
       setConfig(localFallbackCfg);
       setOwnerKey("");
@@ -158,6 +156,8 @@ export function useOwnerSession({
         localFallbackCfg,
       );
       if (ok) {
+        saveActiveOwnerHandle(nextHandle);
+        saveTreeConfig(nextHandle, localFallbackCfg);
         showToast(`Active handle set to @${nextHandle}`);
       } else {
         showToast(`@${nextHandle} requires its Owner Access Key`);
@@ -188,13 +188,22 @@ export function useOwnerSession({
       if (!cleanedKey) return;
       const ok = await claimOrSyncOwner(targetHandle, cleanedKey);
       if (ok) {
+        saveActiveOwnerHandle(targetHandle);
+        setActiveHandle(targetHandle);
         setUnlockDraft("");
         showToast(`Unlocked @${targetHandle} Mail & settings`);
       } else {
         showToast("Invalid Owner Access Key for this handle", "error");
       }
     },
-    [activeHandle, claimOrSyncOwner, handleDraft, showToast, unlockDraft],
+    [
+      activeHandle,
+      claimOrSyncOwner,
+      handleDraft,
+      setActiveHandle,
+      showToast,
+      unlockDraft,
+    ],
   );
 
   return {
