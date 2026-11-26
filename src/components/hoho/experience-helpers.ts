@@ -92,3 +92,20 @@ export function writeVisitorDraft(handle: string, draft: string): void {
     // Ignore storage quota errors cleanly
   }
 }
+
+export function formatDisplayShareUrl(fullUrl: string, maxLen = 36): string {
+  const stripped = fullUrl.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  if (stripped.length <= maxLen) return stripped;
+  const slashIdx = stripped.indexOf("/");
+  if (slashIdx > 0) {
+    const host = stripped.slice(0, slashIdx);
+    const tail = stripped.slice(slashIdx);
+    if (tail.length + 7 <= maxLen) {
+      const keepHost = Math.max(6, maxLen - tail.length - 1);
+      return `${host.slice(0, keepHost)}…${tail}`;
+    }
+  }
+  const head = Math.ceil((maxLen - 1) * 0.52);
+  const tailLen = Math.max(6, maxLen - 1 - head);
+  return `${stripped.slice(0, head)}…${stripped.slice(-tailLen)}`;
+}

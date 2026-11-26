@@ -36,6 +36,7 @@ import {
   type ResolvedOrnament,
 } from "@/components/ascii-tree-canvas";
 import {
+  formatDisplayShareUrl,
   getKeyboardShortcuts,
   readVisitorDraft,
   writeVisitorDraft,
@@ -139,7 +140,6 @@ export function HohoExperience({
   const [daysToChristmas, setDaysToChristmas] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [canNativeShare, setCanNativeShare] = useState<boolean>(false);
 
   const [serverSynced, setServerSynced] = useState<boolean>(() =>
     Boolean(initialVisitorTree),
@@ -148,7 +148,6 @@ export function HohoExperience({
   const [mailOpen, setMailOpen] = useState<boolean>(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [latestDroppedId, setLatestDroppedId] = useState<string | null>(null);
-  const [shareMenuOpen, setShareMenuOpen] = useState<boolean>(false);
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
@@ -166,7 +165,6 @@ export function HohoExperience({
   const dropTimerRef = useRef<number | null>(null);
   const composeSubmitKeyRef = useRef<string | null>(null);
   const configSyncTimerRef = useRef<number | null>(null);
-  const shareRowWrapRef = useRef<HTMLDivElement | null>(null);
   const shortcutsWrapRef = useRef<HTMLDivElement | null>(null);
   const visitorCardRef = useRef<HTMLElement | null>(null);
   const visitorInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -252,7 +250,6 @@ export function HohoExperience({
       if (cancelled) return;
       setOrigin(window.location.origin);
       setIsOnline(navigator.onLine);
-      setCanNativeShare(typeof navigator.share === "function");
 
       const nowDate = new Date();
       const year = nowDate.getFullYear();
@@ -357,27 +354,6 @@ export function HohoExperience({
     setHandleDraft,
     setOwnerKey,
   ]);
-
-  useEffect(() => {
-    if (!shareMenuOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (
-        shareRowWrapRef.current &&
-        !shareRowWrapRef.current.contains(event.target as Node)
-      ) {
-        setShareMenuOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShareMenuOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [shareMenuOpen]);
 
   useEffect(() => {
     if (!shortcutsOpen) return;
@@ -743,7 +719,7 @@ export function HohoExperience({
       }
       copiedTimerRef.current = window.setTimeout(() => {
         setCopiedLink(false);
-      }, 2000);
+      }, 1200);
     });
   }, [handleCopyText, shareUrl]);
 
@@ -968,12 +944,6 @@ export function HohoExperience({
       viewMode,
     ],
   );
-
-  const shareCaption = `${config.prompt}\nLeave an anonymous ornament on my 3D tree: ${shareUrl}`;
-  const xShareUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(
-    `${config.prompt} Hang an anonymous ornament on my tree:`,
-  )}&url=${encodeURIComponent(shareUrl)}`;
-  const waShareUrl = `https://wa.me/?text=${encodeURIComponent(shareCaption)}`;
 
   const sentOrnamentMeta = visitorSentOrnament
     ? (ORNAMENT_TYPES[visitorSentOrnament.ornamentType] ?? ORNAMENT_TYPES[0])
@@ -1303,6 +1273,16 @@ export function HohoExperience({
               role="tablist"
               aria-label="Creator studio sections"
             >
+              <span
+                className="studio-tabs-indicator"
+                aria-hidden="true"
+                style={{
+                  transform: `translateX(${
+                    (studioTab === "share" ? 0 : studioTab === "style" ? 1 : 2) *
+                    100
+                  }%)`,
+                }}
+              />
               <button
                 type="button"
                 role="tab"
@@ -1349,7 +1329,7 @@ export function HohoExperience({
 
             {studioTab === "share" ? (
               <>
-                <div className="bio-hero-card">
+                <div className="bio-profile-flat">
                   <div className="bio-identity-row">
                     <div className="avatar-ring" aria-hidden="true">
                       {avatarGlyph}
@@ -1384,142 +1364,74 @@ export function HohoExperience({
                   ) : null}
                 </div>
 
-                <div ref={shareRowWrapRef} className="share-row-wrap">
-                  <label htmlFor="owner-share-url" className="section-label">
+                <div className="share-row-wrap">
+                  <span className="section-label">
                     Your bio link ({serverSynced ? "short QR ready" : "portable link"})
-                  </label>
-                  <div className="url-row">
-                    <input
-                      id="owner-share-url"
-                      type="text"
-                      readOnly
-                      value={shareUrl}
-                      className="social-input is-mono"
-                      onFocus={(event) => event.currentTarget.select()}
-                    />
+                  </span>
+                  <div className="share-link-pill">
+                    <span className="share-link-display" title={shareUrl}>
+                      {formatDisplayShareUrl(shareUrl)}
+                    </span>
                     <button
                       type="button"
-                      className={`copy-inline-btn ${copiedLink ? "is-copied" : ""}`}
+                      className={`share-copy-icon-btn ${copiedLink ? "is-copied" : ""}`}
+                      aria-label={copiedLink ? "Copied bio link" : "Copy bio link"}
                       onClick={handleCopyLink}
                     >
-                      {copiedLink ? (
-                        <>
-                          <Check size={14} strokeWidth={2.2} aria-hidden="true" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} strokeWidth={2} aria-hidden="true" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="share-icon-btn"
-                      aria-label="More share options"
-                      aria-expanded={shareMenuOpen}
-                      onClick={() => setShareMenuOpen((prev) => !prev)}
-                    >
-                      <Share2 size={15} strokeWidth={2} aria-hidden="true" />
+                      <span
+                        className={`copy-glyph ${
+                          copiedLink ? "is-hidden" : "is-visible"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        <Copy size={14} strokeWidth={2} />
+                      </span>
+                      <span
+                        className={`copy-glyph ${
+                          copiedLink ? "is-visible" : "is-hidden"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        <Check size={14} strokeWidth={2.2} />
+                      </span>
                     </button>
                   </div>
-
-                  {shareMenuOpen ? (
-                    <div className="share-menu" role="menu">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="share-menu-item"
-                        onClick={() => {
-                          setShareMenuOpen(false);
-                          void handleCopyText(shareCaption, "Story caption");
-                        }}
-                      >
-                        Copy IG / Story caption
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="share-menu-item"
-                        onClick={() => {
-                          setShareMenuOpen(false);
-                          void handleDownloadQr();
-                        }}
-                      >
-                        Save {theme.label} QR PNG
-                      </button>
-                      <a
-                        href={xShareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        role="menuitem"
-                        className="share-menu-item"
-                        onClick={() => setShareMenuOpen(false)}
-                      >
-                        Post to X ↗
-                      </a>
-                      <a
-                        href={waShareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        role="menuitem"
-                        className="share-menu-item"
-                        onClick={() => setShareMenuOpen(false)}
-                      >
-                        Share on WhatsApp ↗
-                      </a>
-                      {canNativeShare ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="share-menu-item"
-                          onClick={() => {
-                            setShareMenuOpen(false);
-                            void navigator
-                              .share({
-                                title: `${config.displayName || `@${activeHandle}`} — Hoho.xo`,
-                                text: config.prompt,
-                                url: shareUrl,
-                              })
-                              .catch(() => {});
-                          }}
-                        >
-                          Share via device sheet ↗
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
 
-                <div className="owner-action-row">
+                <div className="share-cta-stack">
                   <button
                     type="button"
                     className="primary-btn"
                     onClick={() => void handleDownloadInvite()}
                   >
                     <Share2 size={15} strokeWidth={2} aria-hidden="true" />
-                    <span>IG Story Invite</span>
+                    <span>Share to Story</span>
                   </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() =>
-                      changeViewMode((prev) => (prev === "qr" ? "tree" : "qr"))
-                    }
-                  >
-                    {viewMode === "qr" ? (
-                      <>
-                        <TreePine size={15} strokeWidth={2} aria-hidden="true" />
-                        <span>Show Tree</span>
-                      </>
-                    ) : (
-                      <>
-                        <QrCode size={15} strokeWidth={2} aria-hidden="true" />
-                        <span>Show QR</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="share-secondary-row">
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() =>
+                        changeViewMode((prev) => (prev === "qr" ? "tree" : "qr"))
+                      }
+                    >
+                      {viewMode === "qr" ? (
+                        <>
+                          <TreePine size={15} strokeWidth={2} aria-hidden="true" />
+                          <span>Show Tree</span>
+                        </>
+                      ) : (
+                        <>
+                          <QrCode size={15} strokeWidth={2} aria-hidden="true" />
+                          <span>Show QR</span>
+                        </>
+                      )}
+                    </button>
+                    <Link href={visitorRelativeHref} className="secondary-btn">
+                      <span>Preview</span>
+                      <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
+                    </Link>
+                  </div>
                 </div>
 
                 {unreadCount > 0 && newestUnread ? (
@@ -1533,18 +1445,34 @@ export function HohoExperience({
                   </button>
                 ) : null}
 
-                <div className="owner-summary-bar">
-                  <p className="tree-meta-line">
-                    {visibleCount} on tree · {messages.length} total · {unreadCount} unread
+                {messages.length === 0 ? (
+                  <p className="share-empty-state">
+                    Your tree is bare. Share your link and it fills up.
                   </p>
-                  <Link
-                    href={visitorRelativeHref}
-                    className="dice-btn mobile-visitor-link"
-                  >
-                    <span>Preview</span>
-                    <ExternalLink size={12} strokeWidth={2.1} aria-hidden="true" />
-                  </Link>
-                </div>
+                ) : (
+                  <div className="share-stats-row">
+                    <div className="share-stat-cell">
+                      <span className="share-stat-value">{visibleCount}</span>
+                      <span className="share-stat-label">On tree</span>
+                    </div>
+                    <div className="share-stat-cell">
+                      <span className="share-stat-value">{messages.length}</span>
+                      <span className="share-stat-label">Total</span>
+                    </div>
+                    <div className="share-stat-cell">
+                      <span className="share-stat-value">
+                        {unreadCount > 0 ? (
+                          <span
+                            className="unread-stat-dot"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <span>{unreadCount}</span>
+                      </span>
+                      <span className="share-stat-label">Unread</span>
+                    </div>
+                  </div>
+                )}
               </>
             ) : null}
 
