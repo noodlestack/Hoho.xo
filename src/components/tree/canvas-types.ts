@@ -74,6 +74,7 @@ export interface AsciiTreeCanvasProps {
   staticMode?: boolean;
   supporter?: boolean;
   isOwnerMode: boolean;
+  paused?: boolean;
   onSelectOrnament: (ornament: ResolvedOrnament) => void;
   onToggleQrView: () => void;
   onZoomChange?: (nextZoom: number) => void;

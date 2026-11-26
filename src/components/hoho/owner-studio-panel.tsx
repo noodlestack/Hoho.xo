@@ -193,17 +193,19 @@ export function OwnerStudioPanel({
                     <span className="supporter-badge">★ Supporter</span>
                   ) : null}
                   <span>·</span>
-                  <span
-                    className={[
-                      "status-dot",
-                      config.pauseInbox ? "is-paused" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {config.pauseInbox ? "Paused" : "Accepting notes"}
+                  <span className="bio-status-inline">
+                    <span
+                      className={[
+                        "status-dot",
+                        config.pauseInbox ? "is-paused" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {config.pauseInbox ? "Paused" : "Accepting notes"}
+                    </span>
                   </span>
                 </p>
               </div>
@@ -288,7 +290,11 @@ export function OwnerStudioPanel({
                   </>
                 )}
               </button>
-              <Link href={visitorRelativeHref} className="secondary-btn">
+              <Link
+                href={visitorRelativeHref}
+                prefetch={false}
+                className="secondary-btn"
+              >
                 <span>Preview</span>
                 <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
               </Link>

@@ -312,6 +312,13 @@ export function HohoExperience({
             staticMode={staticMode}
             supporter={Boolean(config.supporter)}
             isOwnerMode={isOwnerMode}
+            paused={
+              mailOpen ||
+              Boolean(activeMessageId) ||
+              inviteSheetOpen ||
+              supportOpen ||
+              mobileSheetOpen
+            }
             onSelectOrnament={mailActions.handleSelectOrnament}
             onToggleQrView={() =>
               controls.changeViewMode((prev) => (prev === "qr" ? "tree" : "qr"))
@@ -339,111 +346,113 @@ export function HohoExperience({
         />
       </div>
 
-      <div className="sidebar-shell">
-        <SidebarTopbar {...navChromeProps} />
+      {!isMobileViewport ? (
+        <div className="sidebar-shell">
+          <SidebarTopbar {...navChromeProps} />
 
-        <aside
-          ref={visitorCardRef}
-          className="social-card"
-          aria-label={
-            isOwnerMode
-              ? "Owner tree creator hub"
-              : `Send an anonymous note to @${activeHandle}`
-          }
-        >
-          {!isOnline ? (
-            <div className="offline-pill" role="status">
-              Offline — changes will sync when reconnected
-            </div>
-          ) : null}
-          {isOwnerMode ? (
-            <OwnerStudioPanel
-              studioTab={studioTab}
-              setStudioTab={setStudioTab}
-              ownerClaimError={ownerSession.ownerClaimError}
-              activeHandle={activeHandle}
-              config={config}
-              updateConfig={controls.updateConfig}
-              avatarGlyph={controls.avatarGlyph}
-              daysToChristmas={daysToChristmas}
-              serverSynced={serverSynced}
-              shareUrl={controls.shareUrl}
-              visitorRelativeHref={controls.visitorRelativeHref}
-              copiedLink={controls.copiedLink}
-              onCopyLink={controls.handleCopyLink}
-              onCopyText={controls.handleCopyText}
-              onOpenInviteSheet={() => {
-                setMobileSheetOpen(false);
-                setInviteSheetOpen(true);
-              }}
-              viewMode={viewMode}
-              onToggleQrView={() =>
-                controls.changeViewMode((prev) =>
-                  prev === "qr" ? "tree" : "qr",
-                )
-              }
-              pushSubscribed={pushSub.pushSubscribed}
-              pushBusy={pushSub.pushBusy}
-              iosNeedsStandalone={pushSub.iosNeedsStandalone}
-              onTogglePush={pushSub.handleTogglePush}
-              unreadCount={controls.unreadCount}
-              newestUnread={controls.newestUnread}
-              onOpenMessage={mailActions.handleOpenMessage}
-              messagesCount={messages.length}
-              visibleCount={controls.visibleCount}
-              currentTrack={controls.currentTrack}
-              musicPlaying={controls.musicPlaying}
-              onToggleMusic={controls.handleToggleMusic}
-              onNextTrack={controls.handleNextTrack}
-              soundEnabled={soundEnabled}
-              onToggleSound={setSoundEnabled}
-              handleDraft={ownerSession.handleDraft}
-              setHandleDraft={ownerSession.setHandleDraft}
-              commitHandleChange={ownerSession.commitHandleChange}
-              hasInvalidHandleDraft={controls.hasInvalidHandleDraft}
-              hasPendingHandleChange={controls.hasPendingHandleChange}
-              pendingHandleSlug={controls.pendingHandleSlug}
-              onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
-              ownerKey={ownerSession.ownerKey}
-              unlockDraft={ownerSession.unlockDraft}
-              setUnlockDraft={ownerSession.setUnlockDraft}
-              handleUnlockWithKey={ownerSession.handleUnlockWithKey}
-            />
-          ) : (
-            <VisitorComposePanel
-              activeHandle={activeHandle}
-              config={config}
-              theme={theme}
-              avatarGlyph={controls.avatarGlyph}
-              daysToChristmas={daysToChristmas}
-              visibleCount={controls.visibleCount}
-              visitorSentOrnament={visitor.visitorSentOrnament}
-              setVisitorSentOrnament={visitor.setVisitorSentOrnament}
-              sentOrnamentColor={visitor.sentOrnamentColor}
-              sentOrnamentMeta={visitor.sentOrnamentMeta}
-              noteBody={visitor.noteBody}
-              setNoteBody={visitor.setNoteBody}
-              honeypot={visitor.honeypot}
-              setHoneypot={visitor.setHoneypot}
-              selectedOrnament={visitor.selectedOrnament}
-              setSelectedOrnament={visitor.setSelectedOrnament}
-              submittingNote={visitor.submittingNote}
-              submitError={visitor.submitError}
-              setSubmitError={visitor.setSubmitError}
-              composeSubmitKeyRef={composeSubmitKeyRef}
-              visitorInputRef={visitorInputRef}
-              visitorSubmitBtnRef={visitorSubmitBtnRef}
-              onVisitorDice={visitor.handleVisitorDice}
-              onSubmit={visitor.handleVisitorSubmit}
-            />
-          )}
+          <aside
+            ref={visitorCardRef}
+            className="social-card"
+            aria-label={
+              isOwnerMode
+                ? "Owner tree creator hub"
+                : `Send an anonymous note to @${activeHandle}`
+            }
+          >
+            {!isOnline ? (
+              <div className="offline-pill" role="status">
+                Offline — changes will sync when reconnected
+              </div>
+            ) : null}
+            {isOwnerMode ? (
+              <OwnerStudioPanel
+                studioTab={studioTab}
+                setStudioTab={setStudioTab}
+                ownerClaimError={ownerSession.ownerClaimError}
+                activeHandle={activeHandle}
+                config={config}
+                updateConfig={controls.updateConfig}
+                avatarGlyph={controls.avatarGlyph}
+                daysToChristmas={daysToChristmas}
+                serverSynced={serverSynced}
+                shareUrl={controls.shareUrl}
+                visitorRelativeHref={controls.visitorRelativeHref}
+                copiedLink={controls.copiedLink}
+                onCopyLink={controls.handleCopyLink}
+                onCopyText={controls.handleCopyText}
+                onOpenInviteSheet={() => {
+                  setMobileSheetOpen(false);
+                  setInviteSheetOpen(true);
+                }}
+                viewMode={viewMode}
+                onToggleQrView={() =>
+                  controls.changeViewMode((prev) =>
+                    prev === "qr" ? "tree" : "qr",
+                  )
+                }
+                pushSubscribed={pushSub.pushSubscribed}
+                pushBusy={pushSub.pushBusy}
+                iosNeedsStandalone={pushSub.iosNeedsStandalone}
+                onTogglePush={pushSub.handleTogglePush}
+                unreadCount={controls.unreadCount}
+                newestUnread={controls.newestUnread}
+                onOpenMessage={mailActions.handleOpenMessage}
+                messagesCount={messages.length}
+                visibleCount={controls.visibleCount}
+                currentTrack={controls.currentTrack}
+                musicPlaying={controls.musicPlaying}
+                onToggleMusic={controls.handleToggleMusic}
+                onNextTrack={controls.handleNextTrack}
+                soundEnabled={soundEnabled}
+                onToggleSound={setSoundEnabled}
+                handleDraft={ownerSession.handleDraft}
+                setHandleDraft={ownerSession.setHandleDraft}
+                commitHandleChange={ownerSession.commitHandleChange}
+                hasInvalidHandleDraft={controls.hasInvalidHandleDraft}
+                hasPendingHandleChange={controls.hasPendingHandleChange}
+                pendingHandleSlug={controls.pendingHandleSlug}
+                onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
+                ownerKey={ownerSession.ownerKey}
+                unlockDraft={ownerSession.unlockDraft}
+                setUnlockDraft={ownerSession.setUnlockDraft}
+                handleUnlockWithKey={ownerSession.handleUnlockWithKey}
+              />
+            ) : (
+              <VisitorComposePanel
+                activeHandle={activeHandle}
+                config={config}
+                theme={theme}
+                avatarGlyph={controls.avatarGlyph}
+                daysToChristmas={daysToChristmas}
+                visibleCount={controls.visibleCount}
+                visitorSentOrnament={visitor.visitorSentOrnament}
+                setVisitorSentOrnament={visitor.setVisitorSentOrnament}
+                sentOrnamentColor={visitor.sentOrnamentColor}
+                sentOrnamentMeta={visitor.sentOrnamentMeta}
+                noteBody={visitor.noteBody}
+                setNoteBody={visitor.setNoteBody}
+                honeypot={visitor.honeypot}
+                setHoneypot={visitor.setHoneypot}
+                selectedOrnament={visitor.selectedOrnament}
+                setSelectedOrnament={visitor.setSelectedOrnament}
+                submittingNote={visitor.submittingNote}
+                submitError={visitor.submitError}
+                setSubmitError={visitor.setSubmitError}
+                composeSubmitKeyRef={composeSubmitKeyRef}
+                visitorInputRef={visitorInputRef}
+                visitorSubmitBtnRef={visitorSubmitBtnRef}
+                onVisitorDice={visitor.handleVisitorDice}
+                onSubmit={visitor.handleVisitorSubmit}
+              />
+            )}
 
-          <PanelFooter
-            isOwnerMode={isOwnerMode}
-            onOpenSupport={() => setSupportOpen(true)}
-          />
-        </aside>
-      </div>
+            <PanelFooter
+              isOwnerMode={isOwnerMode}
+              onOpenSupport={() => setSupportOpen(true)}
+            />
+          </aside>
+        </div>
+      ) : null}
 
       {isMobileViewport && isOwnerMode ? (
         <MobileOwnerSheet
@@ -461,10 +470,25 @@ export function HohoExperience({
           messagesCount={messages.length}
           onOpenInviteSheet={() => setInviteSheetOpen(true)}
           onOpenMail={() => setMailOpen(true)}
+          onOpenSupport={() => setSupportOpen(true)}
+          currentTrack={controls.currentTrack}
+          musicPlaying={controls.musicPlaying}
+          onToggleMusic={controls.handleToggleMusic}
+          onNextTrack={controls.handleNextTrack}
+          soundEnabled={soundEnabled}
+          onToggleSound={setSoundEnabled}
           handleDraft={ownerSession.handleDraft}
           setHandleDraft={ownerSession.setHandleDraft}
           commitHandleChange={ownerSession.commitHandleChange}
-          onOpenSupport={() => setSupportOpen(true)}
+          hasInvalidHandleDraft={controls.hasInvalidHandleDraft}
+          hasPendingHandleChange={controls.hasPendingHandleChange}
+          pendingHandleSlug={controls.pendingHandleSlug}
+          onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
+          ownerKey={ownerSession.ownerKey}
+          onCopyText={controls.handleCopyText}
+          unlockDraft={ownerSession.unlockDraft}
+          setUnlockDraft={ownerSession.setUnlockDraft}
+          handleUnlockWithKey={ownerSession.handleUnlockWithKey}
         />
       ) : null}
 

@@ -93,6 +93,7 @@ export function MobileVisitorSheet({
               : undefined
           }
         >
+          <div className="vaul-drag-handle" aria-hidden="true" />
           <div className="visitor-sheet-topbar">
             <span className="visitor-mini-preview">
               <span
@@ -127,7 +128,6 @@ export function MobileVisitorSheet({
                   : "Surprise"}
               </span>
             </span>
-            <div className="vaul-drag-handle" aria-hidden="true" />
             <div
               className="visitor-snap-pills"
               role="group"
@@ -144,16 +144,16 @@ export function MobileVisitorSheet({
               <button
                 type="button"
                 className="visitor-snap-btn"
-                aria-pressed={visitorSnap === 0.55}
-                onClick={() => onVisitorSnapChange(0.55)}
+                aria-pressed={visitorSnap === 0.56}
+                onClick={() => onVisitorSnapChange(0.56)}
               >
                 Half
               </button>
               <button
                 type="button"
                 className="visitor-snap-btn"
-                aria-pressed={visitorSnap === 0.92}
-                onClick={() => onVisitorSnapChange(0.92)}
+                aria-pressed={visitorSnap === 0.84}
+                onClick={() => onVisitorSnapChange(0.84)}
               >
                 Full
               </button>
@@ -330,6 +330,20 @@ export function MobileVisitorSheet({
                 </p>
               </form>
             )}
+            <footer className="panel-footer">
+              <span className="credit-badge">
+                made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
+              </span>
+              <span className="inline-flex items-center gap-2 text-[12px] opacity-80">
+                <Link href="/privacy" className="hover:underline">
+                  Privacy
+                </Link>
+                <span aria-hidden="true">·</span>
+                <Link href="/terms" className="hover:underline">
+                  Terms
+                </Link>
+              </span>
+            </footer>
           </div>
         </Drawer.Content>
       </Drawer.Portal>

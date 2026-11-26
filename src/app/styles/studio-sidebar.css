@@ -257,6 +257,13 @@
   color: var(--text-dim);
 }
 
+.bio-status-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;

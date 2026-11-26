@@ -133,15 +133,15 @@
 }
 
 .avatar-picker-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .avatar-choice-btn {
-  min-width: 38px;
-  height: 38px;
-  padding: 0 10px;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(11, 13, 18, 0.72);
@@ -298,9 +298,16 @@
   gap: 8px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  padding: 2px 1px 4px;
+  padding: 2px 20px 4px 1px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  mask-image: linear-gradient(to right, #000 0%, #000 91%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 91%,
+    transparent 100%
+  );
 }
 
 .prompt-chip-row::-webkit-scrollbar {
@@ -340,9 +347,16 @@
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 2px 1px 4px;
+  padding: 2px 20px 4px 1px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  mask-image: linear-gradient(to right, #000 0%, #000 91%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 91%,
+    transparent 100%
+  );
 }
 
 .ornament-strip::-webkit-scrollbar {

@@ -41,6 +41,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   staticMode = false,
   supporter = false,
   isOwnerMode,
+  paused = false,
   onSelectOrnament,
   onToggleQrView,
   onZoomChange,
@@ -55,6 +56,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   const internalZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const renderZoomRef = useRef<number>(Math.max(0.72, Math.min(1.45, zoom)));
   const onZoomChangeRef = useRef(onZoomChange);
+  const pausedRef = useRef(paused);
   const [canvasFailed, setCanvasFailed] = useState(false);
 
   const zBufferRef = useRef<Float32Array>(new Float32Array(0));
@@ -94,7 +96,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
   const perfMonitorRef = useRef({
     emaMs: 16.6,
     slowStreak: 0,
-    skipFrames: 3,
+    skipFrames: 14,
     lastFps: 60,
   });
   const debugHud = useMemo(
@@ -156,7 +158,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     };
   }, [latestDroppedId, reducedMotion]);
 
-  const isDenseCloud = layout.quality !== "low";
+  const isDenseCloud = layout.quality === "high";
   const cloud = useMemo(() => {
     if (!matrix.ok) return [];
     return generateQrTreeCloud(matrix, qrValue, {
@@ -234,8 +236,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       }
     }
 
-    if (reducedMotion || staticMode) {
-      drawNowRef.current();
+    if (reducedMotion || staticMode || paused) {
+      if (!paused) drawNowRef.current();
     } else {
       ensureLoopRef.current();
     }
@@ -257,9 +259,19 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     staticMode,
     supporter,
     isOwnerMode,
+    paused,
     layout,
     onZoomChange,
   ]);
+
+  useEffect(() => {
+    const wasPaused = pausedRef.current;
+    pausedRef.current = paused;
+    if (!paused && wasPaused) {
+      perfMonitorRef.current.skipFrames = 10;
+      ensureLoopRef.current();
+    }
+  }, [paused]);
 
   const { dragStateRef, hoveredInfo, pointerHandlers } = useCanvasPointers({
     canvasRef,
@@ -324,10 +336,12 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
 
     const tick = (now: number) => {
       rafId = 0;
+      if (pausedRef.current) return;
       drawFrame(now);
       if (
         !hidden &&
         inViewport &&
+        !pausedRef.current &&
         !propsRef.current.reducedMotion &&
         !propsRef.current.staticMode
       ) {
@@ -339,6 +353,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       if (
         !hidden &&
         inViewport &&
+        !pausedRef.current &&
         !propsRef.current.reducedMotion &&
         !propsRef.current.staticMode &&
         rafId === 0

@@ -252,7 +252,7 @@ export function useExperienceHydration({
   useGSAP(
     () => {
       const card = visitorCardRef.current;
-      if (!card) return;
+      if (!card || window.innerWidth < 768) return;
       if (reducedMotion || staticMode) {
         gsap.set(card, { clearProps: "transform,opacity" });
         return;

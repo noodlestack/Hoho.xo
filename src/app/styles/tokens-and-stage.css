@@ -454,6 +454,7 @@ select:focus-visible {
   justify-self: end;
   max-width: 100%;
   min-width: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 8px;

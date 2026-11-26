@@ -13,7 +13,8 @@ import {
 } from "@/lib/tree-config";
 import { TREE_THEME_LIST } from "@/lib/tree-themes";
 
-interface OwnerCustomizeTabsProps {
+export interface OwnerCustomizeTabsProps {
+  idPrefix?: string;
   studioTab: Exclude<StudioTab, "share">;
   activeHandle: string;
   config: TreeConfig;
@@ -40,6 +41,7 @@ interface OwnerCustomizeTabsProps {
 
 /** Renders the owner Style (theme, topper, silhouette, scenery, music) and Prompt (identity, filter, access key) tabs. */
 export function OwnerCustomizeTabs({
+  idPrefix = "owner-",
   studioTab,
   activeHandle,
   config,
@@ -266,14 +268,14 @@ export function OwnerCustomizeTabs({
       </div>
 
       <div className="edit-field">
-        <label htmlFor="owner-handle-input" className="section-label">
+        <label htmlFor={`${idPrefix}handle-input`} className="section-label">
           {activeHandle
             ? `Tree handle (/t/${activeHandle})`
             : "Choose your tree handle (/t/...)"}
         </label>
         <div className="url-row">
           <input
-            id="owner-handle-input"
+            id={`${idPrefix}handle-input`}
             type="text"
             className="social-input is-mono"
             placeholder="e.g. santa_2026"
@@ -307,11 +309,11 @@ export function OwnerCustomizeTabs({
       </div>
 
       <div className="edit-field">
-        <label htmlFor="owner-name-input" className="section-label">
+        <label htmlFor={`${idPrefix}name-input`} className="section-label">
           Display name
         </label>
         <input
-          id="owner-name-input"
+          id={`${idPrefix}name-input`}
           type="text"
           className="social-input"
           maxLength={28}
@@ -324,7 +326,7 @@ export function OwnerCustomizeTabs({
 
       <div className="edit-field">
         <div className="prompt-header-row">
-          <label htmlFor="owner-prompt-input" className="section-label">
+          <label htmlFor={`${idPrefix}prompt-input`} className="section-label">
             Bio question prompt
           </label>
           <button
@@ -337,7 +339,7 @@ export function OwnerCustomizeTabs({
           </button>
         </div>
         <textarea
-          id="owner-prompt-input"
+          id={`${idPrefix}prompt-input`}
           className="edit-textarea"
           maxLength={140}
           value={config.prompt}
@@ -346,11 +348,11 @@ export function OwnerCustomizeTabs({
       </div>
 
       <div className="edit-field">
-        <label htmlFor="owner-muted-words" className="section-label">
+        <label htmlFor={`${idPrefix}muted-words`} className="section-label">
           Hidden word filter (comma-separated)
         </label>
         <input
-          id="owner-muted-words"
+          id={`${idPrefix}muted-words`}
           type="text"
           className="social-input"
           maxLength={200}
@@ -407,11 +409,11 @@ export function OwnerCustomizeTabs({
             : "Enter the Owner Access Key for an existing handle to unlock Mail here."}
         </p>
         <form className="url-row" onSubmit={handleUnlockWithKey}>
-          <label htmlFor="owner-unlock-key" className="sr-only">
+          <label htmlFor={`${idPrefix}unlock-key`} className="sr-only">
             Owner Access Key
           </label>
           <input
-            id="owner-unlock-key"
+            id={`${idPrefix}unlock-key`}
             type="password"
             className="social-input is-mono"
             placeholder="Paste key to unlock..."

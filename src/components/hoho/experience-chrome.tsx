@@ -129,6 +129,7 @@ export function StageHeader({
           <>
             <Link
               href={visitorRelativeHref}
+              prefetch={false}
               className="pill-nav-btn"
               data-hide-mobile="true"
             >
@@ -174,7 +175,11 @@ export function SidebarTopbar({
       />
       {isOwnerMode ? (
         <>
-          <Link href={visitorRelativeHref} className="pill-nav-btn">
+          <Link
+            href={visitorRelativeHref}
+            prefetch={false}
+            className="pill-nav-btn"
+          >
             <span>Visitor</span>
             <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
           </Link>

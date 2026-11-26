@@ -22,6 +22,20 @@
   outline: none;
 }
 
+.vaul-sheet-panel::after {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .vaul-sheet-panel:not(.visitor-mobile-sheet):not(.mobile-panel-drawer) {
+    inset: 0;
+    margin: auto;
+    height: fit-content;
+    max-height: min(88dvh, 780px);
+    border-radius: 24px;
+  }
+}
+
 .visitor-mobile-sheet {
   z-index: 35;
   height: 100dvh;
@@ -35,6 +49,10 @@
 
 .visitor-mobile-sheet .mobile-drawer-scroll {
   gap: 8px;
+}
+
+.visitor-mobile-sheet .vaul-drag-handle {
+  margin: 0 auto 2px;
 }
 
 .visitor-mobile-sheet .compose-box {

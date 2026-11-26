@@ -14,7 +14,9 @@
 .sheet-panel {
   width: min(100%, 490px);
   max-height: calc(100dvh - 32px);
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   padding: 24px;
@@ -40,7 +42,9 @@
 .drawer-panel {
   width: min(100%, 460px);
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   padding: max(22px, env(safe-area-inset-top)) 20px
@@ -225,8 +229,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--bg);
@@ -236,7 +240,7 @@
   position: relative;
   display: inline-flex;
   justify-content: center;
-  max-height: 250px;
+  max-height: 210px;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--line);
@@ -246,7 +250,7 @@
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: 250px;
+  max-height: 210px;
   object-fit: contain;
   display: block;
 }
@@ -409,6 +413,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.mail-filter-row .filter-tab {
+  flex: 0 1 auto;
+  padding: 6px 12px;
 }
 
 .filter-tab {

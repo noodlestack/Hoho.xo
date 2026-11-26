@@ -86,13 +86,18 @@ export function VisitorComposePanel({
               <span>·</span>
               <span>{theme.label}</span>
               <span>·</span>
-              <span
-                className={["status-dot", config.pauseInbox ? "is-paused" : ""]
-                  .filter(Boolean)
-                  .join(" ")}
-                aria-hidden="true"
-              />
-              <span>{config.pauseInbox ? "Paused" : "Active"}</span>
+              <span className="bio-status-inline">
+                <span
+                  className={[
+                    "status-dot",
+                    config.pauseInbox ? "is-paused" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-hidden="true"
+                />
+                <span>{config.pauseInbox ? "Paused" : "Active"}</span>
+              </span>
             </p>
           </div>
         </div>

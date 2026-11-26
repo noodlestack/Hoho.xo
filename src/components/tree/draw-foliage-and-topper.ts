@@ -83,7 +83,7 @@ export function drawFoliageAndTopper(
     project3D,
   } = p;
 
-  const glyphAlpha = Math.max(0, 1 - qrMix * 1.15);
+  const glyphAlpha = Math.max(0, 1 - qrMix * 1.35);
   if (glyphAlpha <= 0.02) return;
 
   const cellTotal = cols * rows;
@@ -287,19 +287,38 @@ export function drawFoliageAndTopper(
     ctx.restore();
   }
 
-  ctx.font = `600 ${fontSize}px ${fontFamily}`;
+  const colorBuckets = new Map<string, number[]>();
   for (let idx = 0; idx < cellTotal; idx += 1) {
     if (zBuf[idx] === -Infinity) continue;
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    ctx.globalAlpha = alphaBuf[idx];
-    ctx.fillStyle = colorBuf[idx];
-    ctx.fillText(
-      glyphBuf[idx],
-      Math.round((col + 0.5) * cellW),
-      Math.round((row + 0.5) * cellH),
-    );
+    const color = colorBuf[idx];
+    let bucket = colorBuckets.get(color);
+    if (!bucket) {
+      bucket = [];
+      colorBuckets.set(color, bucket);
+    }
+    bucket.push(idx);
   }
+
+  ctx.font = `600 ${fontSize}px ${fontFamily}`;
+  let lastAlpha = -1;
+  colorBuckets.forEach((indices, color) => {
+    ctx.fillStyle = color;
+    for (let b = 0; b < indices.length; b += 1) {
+      const idx = indices[b];
+      const quantizedAlpha = Math.round(alphaBuf[idx] * 25) * 0.04;
+      if (quantizedAlpha !== lastAlpha) {
+        lastAlpha = quantizedAlpha;
+        ctx.globalAlpha = quantizedAlpha;
+      }
+      const col = idx % cols;
+      const row = (idx / cols) | 0;
+      ctx.fillText(
+        glyphBuf[idx],
+        Math.round((col + 0.5) * cellW),
+        Math.round((row + 0.5) * cellH),
+      );
+    }
+  });
   ctx.globalAlpha = 1;
 
   // 4. Apex topper

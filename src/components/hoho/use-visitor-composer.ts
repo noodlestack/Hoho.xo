@@ -24,7 +24,7 @@ import {
   type TreeTheme,
 } from "@/lib/tree-themes";
 
-export const VISITOR_SNAP_POINTS = [0.28, 0.55, 0.92] as const;
+export const VISITOR_SNAP_POINTS = [0.28, 0.56, 0.84] as const;
 const VISITOR_SNAP_KEY = "hoho:visitor-sheet-snap";
 
 export interface FlyingOrnamentState {
@@ -70,7 +70,7 @@ export function useVisitorComposer({
   setLatestDroppedId,
   dropTimerRef,
 }: UseVisitorComposerOptions) {
-  const [visitorSnap, setVisitorSnap] = useState<number | string | null>(0.55);
+  const [visitorSnap, setVisitorSnap] = useState<number | string | null>(0.56);
   const [keyboardOffset, setKeyboardOffset] = useState<number>(0);
 
   const [noteBody, setNoteBody] = useState<string>("");
@@ -94,7 +94,7 @@ export function useVisitorComposer({
     try {
       const saved = window.sessionStorage.getItem(VISITOR_SNAP_KEY);
       const parsed = saved ? Number(saved) : Number.NaN;
-      if (parsed === 0.28 || parsed === 0.55 || parsed === 0.92) {
+      if (parsed === 0.28 || parsed === 0.56 || parsed === 0.84) {
         queueMicrotask(() => setVisitorSnap(parsed));
       }
     } catch {
