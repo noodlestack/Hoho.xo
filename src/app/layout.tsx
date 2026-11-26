@@ -7,6 +7,7 @@ import {
   Plus_Jakarta_Sans,
 } from "next/font/google";
 import { Toaster } from "sonner";
+import { SwRegister } from "@/components/sw-register";
 import "./globals.css";
 
 const sans = Plus_Jakarta_Sans({
@@ -112,6 +113,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${sans.variable} ${display.variable} ${mono.variable} ${handwriting.variable}`}
     >
       <body>
+        <SwRegister />
         {children}
         <Toaster
           theme="dark"

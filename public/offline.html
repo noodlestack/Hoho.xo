@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0B0D12" />
+    <title>Hoho.xo — Offline</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(circle at 50% 25%, #16241d 0%, #0b0d12 62%);
+        color: #f2ede4;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      main {
+        width: 100%;
+        max-width: 420px;
+        padding: 28px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 22px;
+        background: rgba(14, 17, 24, 0.92);
+        text-align: center;
+      }
+      pre {
+        margin: 0 auto 18px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 15px;
+        line-height: 1.35;
+        color: #7ef0b4;
+      }
+      .star {
+        color: #f5c451;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+        font-weight: 700;
+      }
+      p {
+        margin: 0 0 20px;
+        color: #c2bcb0;
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      a.btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 22px;
+        border-radius: 999px;
+        background: #f5c451;
+        color: #0b0d12;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <pre aria-hidden="true"><span class="star">*</span>
+/+\
+* . +
+/+ x .\
+. + * x +
+/ x . + . \
+|||</pre>
+      <h1>Connection paused</h1>
+      <p>
+        You&apos;re offline right now — reconnect to send or unwrap anonymous
+        ornaments.
+      </p>
+      <a href="/" class="btn">Try again</a>
+    </main>
+  </body>
+</html>
