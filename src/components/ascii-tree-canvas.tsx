@@ -316,6 +316,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     cloud,
     theme,
     topper,
+    shape,
     scenery,
     viewMode,
     showSnow,
@@ -337,6 +338,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       cloud,
       theme,
       topper,
+      shape,
       scenery,
       viewMode,
       showSnow,
@@ -381,6 +383,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     cloud,
     theme,
     topper,
+    shape,
     scenery,
     zoom,
     viewMode,
@@ -418,6 +421,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         cloud: curCloud,
         theme: curTheme,
         topper: curTopper,
+        shape: curShape = "classic",
         scenery: curScenery,
         showSnow: curSnow,
         showGarland: curShowGarland,
@@ -465,13 +469,12 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      // Stage-native centering: canvas occupies the dedicated stage column directly
+      // Font & grid cell sizing + stage optical centering
+      const isCompact = cssW < 640;
       const freeWidth = Math.max(200, cssW);
       const stageCenterX = cssW * 0.5;
-      const stageCenterY = cssH * 0.53;
+      const stageCenterY = isCompact ? cssH * 0.475 : cssH * 0.465;
 
-      // Font & grid cell sizing for ASCII z-buffer
-      const isCompact = cssW < 640;
       const fontSize = isCompact ? 9.5 : 12.2;
       const cellW = fontSize * 0.62;
       const cellH = Math.round(fontSize * 1.1);
@@ -668,11 +671,18 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       const cosX = Math.cos(st.elev);
       const sinX = Math.sin(st.elev);
 
-      const availableH = Math.max(160, (cssH - (isCompact ? 34 : 52)) * 0.9);
+      const availableH = Math.max(
+        180,
+        cssH * (isCompact ? 0.62 : 0.72),
+      );
       const availableW = freeWidth * (isCompact ? 0.92 : 0.88);
-      const treeScale = Math.min(availableH / 11.4, availableW / 7.6);
-      const topScale = Math.min(availableH, availableW) / 7.6;
-      const qrBoxSide = Math.min(availableH * 0.78, freeWidth * 0.84, 340);
+      const treeScale = Math.min(availableH / 9.8, availableW / 7.2);
+      const topScale = Math.min(availableH, availableW) / 7.4;
+      const qrBoxSide = Math.min(
+        Math.max(160, (cssH - (isCompact ? 34 : 52)) * 0.74),
+        freeWidth * 0.84,
+        340,
+      );
 
       const topMix =
         Math.max(0, (st.elev - 0.22) / (1.38 - 0.22)) * (1 - st.qrMix);
@@ -728,17 +738,50 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         return { sx, sy, dz, persp };
       };
 
-      // 3. Deposit QR-constrained 3D cloud into ASCII cell z-buffer with directional lighting & swirl
+      // Soft elliptical ground glow anchoring trunk to snow floor
+      if (bloomIntensity > 0.05) {
+        const basePt = project3D(0, 0.04, 0);
+        const ellipseW = activeScale * 4.4;
+        const ellipseH = activeScale * 1.15;
+        ctx.save();
+        ctx.globalAlpha = 0.22 * bloomIntensity * (1 - topMix * 0.5);
+        ctx.translate(basePt.sx, basePt.sy);
+        ctx.scale(1, ellipseH / Math.max(1, ellipseW));
+        const groundGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, ellipseW);
+        groundGrad.addColorStop(0, curTheme.swatch);
+        groundGrad.addColorStop(0.55, curTheme.foliage[1]);
+        groundGrad.addColorStop(1, "rgba(11, 13, 18, 0)");
+        ctx.fillStyle = groundGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, ellipseW, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 3. Deposit QR-constrained 3D cloud into ASCII cell z-buffer with orbiting Lambert shading
       const glyphAlpha = Math.max(0, 1 - st.qrMix * 1.15);
       const ramp = curTheme.glyphRamp;
       const swirlPeak = Math.sin(st.qrMix * Math.PI) * 0.52;
+      const lightYaw = curReduced
+        ? -0.58
+        : -0.58 + tSec * ((Math.PI * 2) / 24);
+      const lightDirX = Math.sin(lightYaw);
+      const lightDirZ = Math.cos(lightYaw);
+      const windWave = curReduced ? 0 : Math.sin(tSec * 0.7) * (1 - st.qrMix);
+      const brightLightHalos: Array<{ x: number; y: number; color: string; alpha: number }> = [];
+      let lightPassCount = 0;
+      const maxSparseLights = Math.floor(curCloud.length * 0.07);
 
       if (glyphAlpha > 0.02) {
         for (let i = 0; i < curCloud.length; i += 1) {
           const pt = curCloud[i];
 
+          const swayX =
+            pt.kind === "ground"
+              ? 0
+              : Math.pow(Math.max(0, pt.y), 1.5) * 0.008 * windWave;
           let px =
-            pt.x * (1 - st.qrMix) + pt.qrX * TREE_BASE_RADIUS * st.qrMix;
+            (pt.x + swayX) * (1 - st.qrMix) + pt.qrX * TREE_BASE_RADIUS * st.qrMix;
           let pz =
             pt.z * (1 - st.qrMix) + pt.qrZ * TREE_BASE_RADIUS * st.qrMix;
           const py = pt.y * (1 - st.qrMix);
@@ -753,6 +796,12 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             pz = sz2;
           }
 
+          if (pt.kind === "ground") {
+            const distSq = pt.x * pt.x + pt.z * pt.z;
+            const ringBand = Math.floor(Math.sqrt(distSq) / (TREE_BASE_RADIUS * 0.72));
+            if (ringBand > 2 || pt.glyphIdx % 4 !== 0) continue;
+          }
+
           const { sx, sy, dz } = project3D(px, py, pz);
           const col = Math.floor(sx / cellW);
           const row = Math.floor(sy / cellH);
@@ -765,56 +814,129 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           if (pt.kind === "ground") {
             glyphBuf[cIdx] = pt.glyphIdx % 3 === 0 ? ":" : ".";
             colorBuf[cIdx] = curTheme.foliage[1];
-            alphaBuf[cIdx] = 0.45 * glyphAlpha * (1 - topMix * 0.45);
+            alphaBuf[cIdx] = 0.34 * glyphAlpha * (1 - topMix * 0.5);
           } else if (pt.kind === "trunk") {
             glyphBuf[cIdx] = pt.glyphIdx % 2 === 0 ? "|" : "#";
             colorBuf[cIdx] = curTheme.trunk;
-            alphaBuf[cIdx] = 0.92 * glyphAlpha;
-          } else if (pt.kind === "garland" && curShowGarland) {
-            glyphBuf[cIdx] = pt.glyphIdx % 2 === 0 ? "~" : "=";
-            colorBuf[cIdx] = curTheme.garland;
-            alphaBuf[cIdx] = 0.96 * glyphAlpha;
-          } else if (pt.isLight && curShowGarland) {
+            alphaBuf[cIdx] = 0.9 * glyphAlpha;
+          } else if (
+            pt.isLight &&
+            curShowGarland &&
+            lightPassCount < maxSparseLights &&
+            pt.glyphIdx % 3 === 0
+          ) {
+            lightPassCount += 1;
             const pulse = curReduced
-              ? 1
-              : 0.65 + 0.35 * Math.sin(tSec * 3.6 + pt.twinklePhase);
-            glyphBuf[cIdx] = pulse > 0.8 ? "@" : pulse > 0.55 ? "O" : "*";
-            colorBuf[cIdx] =
+              ? 0.9
+              : 0.55 + 0.45 * Math.sin(tSec * 1.6 + pt.twinklePhase);
+            const lColor =
               curTheme.lights[pt.lightIdx % curTheme.lights.length] ??
               curTheme.garland;
-            alphaBuf[cIdx] = (0.85 + 0.15 * pulse) * glyphAlpha;
-          } else if (pt.isTwinkle) {
-            const pulse = curReduced
-              ? 1
-              : 0.55 + 0.45 * Math.sin(tSec * 3.1 + pt.twinklePhase);
-            glyphBuf[cIdx] = pulse > 0.78 ? "*" : "+";
-            colorBuf[cIdx] = pulse > 0.84 ? curTheme.star : curTheme.foliage[3];
-            alphaBuf[cIdx] = pulse * glyphAlpha;
+            glyphBuf[cIdx] = pulse > 0.78 ? "O" : "*";
+            colorBuf[cIdx] = lColor;
+            alphaBuf[cIdx] = (0.72 + 0.28 * pulse) * glyphAlpha;
+            if (pulse > 0.88 && st.qrMix < 0.2 && dz > -0.5) {
+              brightLightHalos.push({
+                x: (col + 0.5) * cellW,
+                y: (row + 0.5) * cellH,
+                color: lColor,
+                alpha: (pulse - 0.85) * 2.2 * glyphAlpha,
+              });
+            }
           } else {
-            // 3D directional lighting from upper-front-left
+            // Single-hue volumetric Lambert term from slowly orbiting light
             const rnx = pt.nx * cosY - pt.nz * sinY;
             const rnz = pt.nx * sinY + pt.nz * cosY;
-            const dirLight = Math.max(
+            const lambert = Math.max(
               0,
-              Math.min(1, 0.52 + rnx * -0.32 + rnz * 0.48),
+              rnx * lightDirX * 0.88 + rnz * lightDirZ * 0.88 + 0.36,
             );
             const depthNorm = Math.max(
               0,
               Math.min(1, (dz + TREE_BASE_RADIUS) / (TREE_BASE_RADIUS * 2)),
             );
-            const lit = depthNorm * 0.45 + dirLight * 0.55;
+            const lit = Math.max(
+              0.08,
+              Math.min(1, lambert * 0.62 + depthNorm * 0.38),
+            );
             const rampIdx = Math.min(
               ramp.length - 1,
-              Math.floor((1 - lit * 0.78) * (ramp.length - 1)),
+              Math.floor((1 - lit * 0.88) * (ramp.length - 1)),
             );
             glyphBuf[cIdx] = ramp[rampIdx] ?? "*";
-            const shadeIdx = Math.min(
-              3,
-              Math.max(0, Math.floor((pt.shade * 0.35 + lit * 2.7))),
-            );
+            const shadeIdx = Math.min(3, Math.max(0, Math.floor(lit * 3.99)));
             colorBuf[cIdx] = curTheme.foliage[shadeIdx];
-            alphaBuf[cIdx] = (0.62 + 0.38 * lit) * glyphAlpha;
+            alphaBuf[cIdx] = (0.48 + 0.5 * lit) * glyphAlpha;
           }
+        }
+
+        // Continuous helical garland curve along outer surface
+        if (curShowGarland && st.qrMix < 0.45) {
+          const rScale =
+            curShape === "spire"
+              ? 0.74
+              : curShape === "wide"
+                ? 1.2
+                : curShape === "layered"
+                  ? 1.04
+                  : 1.0;
+          const hMult =
+            curShape === "spire" ? 1.05 : curShape === "wide" ? 0.94 : 1.0;
+          const tiers = curShape === "layered" ? 6 : 5;
+          const tDepth =
+            curShape === "layered" ? 0.46 : curShape === "wide" ? 0.22 : 0.34;
+          const steps = isCompact ? 130 : 190;
+          for (let s = 0; s <= steps; s += 1) {
+            const frac = 0.07 + (s / steps) * 0.86;
+            const y = 0.55 + frac * (TREE_HEIGHT * hMult - 0.75);
+            const tierPhase = (frac * tiers) % 1;
+            const tierFactor = 1 - tDepth + tDepth * (1 - tierPhase);
+            const maxR =
+              TREE_BASE_RADIUS *
+              rScale *
+              (1 - frac * (curShape === "wide" ? 0.88 : 0.94)) *
+              tierFactor *
+              1.03;
+            const theta = frac * Math.PI * 2 * 3.5;
+            const swayX =
+              Math.pow(Math.max(0, y), 1.5) * 0.008 * windWave;
+            const gx = Math.cos(theta) * maxR + swayX;
+            const gz = Math.sin(theta) * maxR;
+            const { sx, sy, dz } = project3D(
+              gx * (1 - st.qrMix),
+              y * (1 - st.qrMix),
+              gz * (1 - st.qrMix),
+            );
+            const col = Math.floor(sx / cellW);
+            const row = Math.floor(sy / cellH);
+            if (col < 0 || col >= cols || row < 0 || row >= rows) continue;
+            const cIdx = row * cols + col;
+            if (dz + 0.12 <= zBuf[cIdx]) continue;
+            zBuf[cIdx] = dz + 0.12;
+            glyphBuf[cIdx] = s % 2 === 0 ? "~" : ".";
+            colorBuf[cIdx] = curTheme.garland;
+            alphaBuf[cIdx] = 0.85 * glyphAlpha;
+          }
+        }
+
+        // Glow sprite pass behind only the brightest quarter of active twinkle lights
+        const activeSprite = glowSpriteRef.current;
+        if (brightLightHalos.length > 0 && activeSprite) {
+          const lightGlowSize = activeScale * 0.85;
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          for (let i = 0; i < brightLightHalos.length; i += 1) {
+            const h = brightLightHalos[i];
+            ctx.globalAlpha = Math.min(0.24, h.alpha * 0.3);
+            ctx.drawImage(
+              activeSprite.canvas,
+              h.x - lightGlowSize * 0.5,
+              h.y - lightGlowSize * 0.5,
+              lightGlowSize,
+              lightGlowSize,
+            );
+          }
+          ctx.restore();
         }
 
         // Draw surviving ASCII cells
@@ -833,8 +955,10 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         }
         ctx.globalAlpha = 1;
 
-        // 4. Analytically rendered Editable Apex Topper (star, diamond, snowflake, heart)
-        const apex = project3D(0, TREE_HEIGHT + 0.42, 0);
+        // 4. Analytically rendered Editable Apex Topper (sways minimally)
+        const apexSwayX =
+          Math.pow(TREE_HEIGHT, 1.5) * 0.002 * windWave;
+        const apex = project3D(apexSwayX, TREE_HEIGHT + 0.42, 0);
         const starGlow = curReduced
           ? 1
           : 0.82 + 0.18 * Math.sin(tSec * 2.2);
