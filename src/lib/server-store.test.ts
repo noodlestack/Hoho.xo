@@ -267,11 +267,11 @@ describe("SSR privacy sanitization and robots policy", () => {
     expect("body" in pub.ornaments[0]).toBe(false);
   });
 
-  it("configures robots policy allowing / and disallowing /api/ and /t/", () => {
+  it("configures robots policy allowing /, /privacy, /terms and disallowing /api/ and /t/", () => {
     const config = robots();
     const rules = Array.isArray(config.rules) ? config.rules[0] : config.rules;
     expect(rules.userAgent).toBe("*");
-    expect(rules.allow).toBe("/");
+    expect(rules.allow).toEqual(["/", "/privacy", "/terms"]);
     expect(rules.disallow).toEqual(["/api/", "/t/"]);
   });
 

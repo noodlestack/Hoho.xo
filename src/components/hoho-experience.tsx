@@ -2483,6 +2483,15 @@ export function HohoExperience({
           <span className="credit-badge">
             made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
           </span>
+          <span className="inline-flex items-center gap-2 text-[11px] opacity-75">
+            <Link href="/privacy" className="hover:underline">
+              Privacy
+            </Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/terms" className="hover:underline">
+              Terms
+            </Link>
+          </span>
         </footer>
         </aside>
       </div>
