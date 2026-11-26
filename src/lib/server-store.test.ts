@@ -17,7 +17,9 @@ import {
   claimOrVerifyTree,
   deleteMessage,
   getClientIpHash,
+  getMailSummary,
   getOwnerCookieName,
+  getOwnerMailSummary,
   getOwnerTokenFromRequest,
   getTreeRecord,
   markAllMessagesRead,
@@ -1059,5 +1061,40 @@ describe("Task 2.1 moderation phone vs date refinement, lexicon hook, and option
       if (prevKey === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = prevKey;
     }
+  });
+});
+
+describe("Task 2.2 O(1) mail summary", () => {
+  it("tracks unread, latestSeq, and total across message arrivals, read, and report/delete", async () => {
+    const claim = await claimOrVerifyTree("sumtree", null, {});
+    expect(claim.ok).toBe(true);
+    if (!claim.ok || !claim.ownerToken) return;
+
+    expect(await getOwnerMailSummary("sumtree", "wrong")).toBeNull();
+
+    const first = await addAnonymousMessage("sumtree", "First note", 0);
+    const second = await addAnonymousMessage("sumtree", "Second note", 1);
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    expect(await getOwnerMailSummary("sumtree", claim.ownerToken)).toEqual({
+      unread: 2,
+      latestSeq: 2,
+      total: 2,
+    });
+
+    await markMessageRead("sumtree", first.ornament.id);
+    expect(await getMailSummary("sumtree")).toEqual({
+      unread: 1,
+      latestSeq: 2,
+      total: 2,
+    });
+
+    await reportMessage("sumtree", second.ornament.id, "spam");
+    expect(await getMailSummary("sumtree")).toEqual({
+      unread: 0,
+      latestSeq: 2,
+      total: 2,
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   assertSameOrigin,
+  getOwnerMailSummary,
   getOwnerTokenFromRequest,
   markAllMessagesRead,
   verifyTreeOwner,
@@ -21,6 +22,26 @@ export async function GET(
     );
   }
   const token = getOwnerTokenFromRequest(request, cleanHandle);
+  const url = new URL(request.url);
+  if (url.searchParams.get("summary") === "1") {
+    const summary = await getOwnerMailSummary(cleanHandle, token);
+    if (!summary) {
+      return NextResponse.json(
+        { ok: false, error: "Owner authentication required." },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.json(
+      {
+        ok: true,
+        unreadCount: summary.unread,
+        latestSeq: summary.latestSeq,
+        total: summary.total,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const record = await verifyTreeOwner(cleanHandle, token);
 
   if (!record) {

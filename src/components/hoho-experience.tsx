@@ -230,6 +230,10 @@ export function HohoExperience({
   const soundEnabledRef = useRef<boolean>(true);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const mailSeededRef = useRef<boolean>(false);
+  const lastMailSummaryRef = useRef<{
+    unreadCount: number;
+    latestSeq: number;
+  } | null>(null);
 
   useEffect(() => {
     activeHandleRef.current = activeHandle;
@@ -240,6 +244,13 @@ export function HohoExperience({
   const seedKnownMessages = useCallback((list: TreeMessage[]) => {
     knownMessageIdsRef.current = new Set(list.map((m) => m.id));
     mailSeededRef.current = true;
+    let unreadCount = 0;
+    let latestSeq = 0;
+    for (const m of list) {
+      if (m.seq > latestSeq) latestSeq = m.seq;
+      if (m.status === "visible" && m.readAt === null) unreadCount += 1;
+    }
+    lastMailSummaryRef.current = { unreadCount, latestSeq };
   }, []);
 
   const showToast = useCallback(
@@ -566,6 +577,44 @@ export function HohoExperience({
     return () => window.removeEventListener("focus", onFocus);
   }, [isOwnerMode, refreshOwnerMail]);
 
+  const pollOwnerMailSummary = useCallback(
+    async (targetHandle: string) => {
+      if (!isOwnerMode || !parseHandle(targetHandle)) return;
+      try {
+        const res = await fetch(
+          `/api/trees/${encodeURIComponent(targetHandle)}/mail?summary=1`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ok?: boolean;
+          unreadCount?: number;
+          latestSeq?: number;
+        };
+        if (
+          data.ok &&
+          typeof data.unreadCount === "number" &&
+          typeof data.latestSeq === "number"
+        ) {
+          const prev = lastMailSummaryRef.current;
+          if (
+            !prev ||
+            prev.unreadCount !== data.unreadCount ||
+            prev.latestSeq !== data.latestSeq
+          ) {
+            await refreshOwnerMail(targetHandle);
+          }
+        }
+      } catch {
+        // Offline/transient error ignored cleanly
+      }
+    },
+    [isOwnerMode, refreshOwnerMail],
+  );
+
   useEffect(() => {
     if (!isOwnerMode || !serverSynced) return;
     const intervalId = window.setInterval(() => {
@@ -573,11 +622,11 @@ export function HohoExperience({
         typeof document !== "undefined" &&
         document.visibilityState === "visible"
       ) {
-        void refreshOwnerMail(activeHandleRef.current);
+        void pollOwnerMailSummary(activeHandleRef.current);
       }
     }, 12_000);
     return () => window.clearInterval(intervalId);
-  }, [isOwnerMode, serverSynced, refreshOwnerMail]);
+  }, [isOwnerMode, serverSynced, pollOwnerMailSummary]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -667,6 +716,7 @@ export function HohoExperience({
 
       const localFallbackCfg: TreeConfig = { ...config, handle: nextHandle };
       mailSeededRef.current = false;
+      lastMailSummaryRef.current = null;
       saveActiveOwnerHandle(nextHandle);
       saveTreeConfig(nextHandle, localFallbackCfg);
       setActiveHandle(nextHandle);

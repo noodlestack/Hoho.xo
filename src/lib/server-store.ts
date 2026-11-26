@@ -700,3 +700,19 @@ export async function markAllMessagesRead(handle: string): Promise<number> {
 export async function getMailSummary(handle: string): Promise<MailSummary> {
   return getActiveTreeStore().summary(handle);
 }
+
+export async function getOwnerMailSummary(
+  handle: string,
+  providedToken: string | null,
+): Promise<MailSummary | null> {
+  if (!providedToken) return null;
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(handle);
+  if (!existing || existing.ownerTokenHash.length === 0) {
+    return null;
+  }
+  if (!verifyOwnerToken(providedToken, existing.ownerTokenHash)) {
+    return null;
+  }
+  return store.summary(handle);
+}
