@@ -3,6 +3,10 @@ import {
   addAnonymousMessage,
   checkRateLimit,
   getClientIpHash,
+  getGlobalMsgLimit,
+  getHandleHourlyLimit,
+  RATE_LIMIT_POLICY,
+  type RateLimitResult,
 } from "@/lib/server-store";
 import { parseHandle } from "@/lib/tree-config";
 import {
@@ -10,6 +14,37 @@ import {
   formatZodError,
   idempotencyKeySchema,
 } from "@/lib/validation";
+
+function rateLimitDeniedResponse(
+  result: RateLimitResult,
+  rateLimitMessage: string,
+  fallbackRetrySec: number,
+): NextResponse {
+  if (result.unavailable) {
+    return NextResponse.json(
+      { ok: false, error: "Please try again in a moment." },
+      {
+        status: 503,
+        headers: {
+          "Retry-After": String(
+            result.retryAfterSec ?? RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
+          ),
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
+  return NextResponse.json(
+    { ok: false, error: rateLimitMessage },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(result.retryAfterSec ?? fallbackRetrySec),
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
 
 export async function POST(
   request: Request,
@@ -22,19 +57,6 @@ export async function POST(
       { ok: false, error: "Tree not found." },
       { status: 404, headers: { "Cache-Control": "no-store" } },
     );
-  }
-
-  let idempotencyKey: string | undefined;
-  const rawIdem = request.headers.get("idempotency-key");
-  if (rawIdem !== null) {
-    const parsedIdem = idempotencyKeySchema.safeParse(rawIdem);
-    if (!parsedIdem.success) {
-      return NextResponse.json(
-        { ok: false, error: formatZodError(parsedIdem.error) },
-        { status: 400, headers: { "Cache-Control": "no-store" } },
-      );
-    }
-    idempotencyKey = parsedIdem.data;
   }
 
   let rawPayload: unknown;
@@ -71,46 +93,70 @@ export async function POST(
     );
   }
 
+  let idempotencyKey: string | undefined;
+  const rawIdem = request.headers.get("idempotency-key");
+  if (rawIdem !== null) {
+    const parsedIdem = idempotencyKeySchema.safeParse(rawIdem);
+    if (!parsedIdem.success) {
+      return NextResponse.json(
+        { ok: false, error: formatZodError(parsedIdem.error) },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    idempotencyKey = parsedIdem.data;
+  }
+
   const ipHash = getClientIpHash(request);
+
+  const globalLimit = await checkRateLimit(
+    `global:${ipHash}`,
+    getGlobalMsgLimit(),
+    RATE_LIMIT_POLICY.limits.globalMsgWindowMs,
+  );
+  if (!globalLimit.allowed) {
+    return rateLimitDeniedResponse(
+      globalLimit,
+      "Too many notes sent right now. Please try again in a few minutes.",
+      600,
+    );
+  }
+
+  const handleLimit = await checkRateLimit(
+    `handle1h:${cleanHandle}`,
+    getHandleHourlyLimit(),
+    RATE_LIMIT_POLICY.limits.handleHourlyWindowMs,
+  );
+  if (!handleLimit.allowed) {
+    return rateLimitDeniedResponse(
+      handleLimit,
+      "This tree is receiving too many notes right now. Try again shortly.",
+      300,
+    );
+  }
+
   const shortLimit = await checkRateLimit(
     `msg1m:${ipHash}:${cleanHandle}`,
-    6,
-    60_000,
+    RATE_LIMIT_POLICY.limits.ipHandleMinMax,
+    RATE_LIMIT_POLICY.limits.ipHandleMinWindowMs,
   );
   if (!shortLimit.allowed) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "You are sending notes too quickly. Please wait a minute.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(shortLimit.retryAfterSec ?? 60),
-          "Cache-Control": "no-store",
-        },
-      },
+    return rateLimitDeniedResponse(
+      shortLimit,
+      "You are sending notes too quickly. Please wait a minute.",
+      60,
     );
   }
 
   const hourLimit = await checkRateLimit(
     `msg1h:${ipHash}:${cleanHandle}`,
-    30,
-    3_600_000,
+    RATE_LIMIT_POLICY.limits.ipHandleHourMax,
+    RATE_LIMIT_POLICY.limits.ipHandleHourWindowMs,
   );
   if (!hourLimit.allowed) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Hourly note limit reached for this tree. Try again later.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(hourLimit.retryAfterSec ?? 300),
-          "Cache-Control": "no-store",
-        },
-      },
+    return rateLimitDeniedResponse(
+      hourLimit,
+      "Hourly note limit reached for this tree. Try again later.",
+      300,
     );
   }
 

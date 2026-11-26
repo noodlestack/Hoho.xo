@@ -5,6 +5,7 @@ import {
   claimOrVerifyTree,
   getClientIpHash,
   getOwnerTokenFromRequest,
+  RATE_LIMIT_POLICY,
   verifyTreeOwner,
 } from "@/lib/server-store";
 import { parseHandle } from "@/lib/tree-config";
@@ -76,13 +77,30 @@ export async function POST(request: Request) {
   }
 
   const ipHash = getClientIpHash(request);
-  const maxClaimsPerHour = process.env.NODE_ENV === "production" ? 20 : 120;
+  const maxClaimsPerHour =
+    process.env.NODE_ENV === "production"
+      ? RATE_LIMIT_POLICY.limits.claimHourlyProdMax
+      : RATE_LIMIT_POLICY.limits.claimHourlyDevMax;
   const limit = await checkRateLimit(
     `claim:${ipHash}`,
     maxClaimsPerHour,
-    3_600_000,
+    RATE_LIMIT_POLICY.limits.claimHourlyWindowMs,
   );
   if (!limit.allowed) {
+    if (limit.unavailable) {
+      return NextResponse.json(
+        { ok: false, error: "Please try again in a moment." },
+        {
+          status: 503,
+          headers: {
+            "Retry-After": String(
+              limit.retryAfterSec ?? RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
+            ),
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+    }
     return NextResponse.json(
       { ok: false, error: "Too many handle attempts. Try again shortly." },
       {

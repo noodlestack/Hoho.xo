@@ -14,6 +14,7 @@ import {
   getTreeRecord,
   markAllMessagesRead,
   markMessageRead,
+  RATE_LIMIT_POLICY,
   reportMessage,
   resetMemoryStoreForTests,
   toPublicTreeData,
@@ -720,5 +721,91 @@ describe("Task 1.3 trusted proxy IP resolution and salted HMAC hashing", () => {
     delete process.env.HOHO_IP_SALT;
     (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     expect(() => getClientIpHash(req)).toThrow(/HOHO_IP_SALT/);
+  });
+});
+
+describe("Task 1.4 sliding-window rate limiter and fail-closed KV policy", () => {
+  const savedUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const savedToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const savedKvUrl = process.env.KV_REST_API_URL;
+  const savedKvToken = process.env.KV_REST_API_TOKEN;
+  const savedNodeEnv = process.env.NODE_ENV;
+
+  afterAll(() => {
+    vi.useRealTimers();
+    if (savedUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = savedUrl;
+    if (savedToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = savedToken;
+    if (savedKvUrl === undefined) delete process.env.KV_REST_API_URL;
+    else process.env.KV_REST_API_URL = savedKvUrl;
+    if (savedKvToken === undefined) delete process.env.KV_REST_API_TOKEN;
+    else process.env.KV_REST_API_TOKEN = savedKvToken;
+    if (savedNodeEnv === undefined) {
+      delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV =
+        savedNodeEnv;
+    }
+    resetMemoryStoreForTests();
+  });
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+    resetMemoryStoreForTests();
+  });
+
+  it("enforces sliding window allow/deny and accurate retryAfterSec", async () => {
+    expect(RATE_LIMIT_POLICY.kvFailureBehavior).toBe("fail_closed_503");
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-12-20T00:00:00.000Z"));
+
+    expect(await checkRateLimit("slide:k1", 2, 10_000)).toEqual({
+      allowed: true,
+    });
+    vi.advanceTimersByTime(4_000);
+    expect(await checkRateLimit("slide:k1", 2, 10_000)).toEqual({
+      allowed: true,
+    });
+
+    // At t=4s, oldest hit was t=0 -> 6s remaining
+    const blocked = await checkRateLimit("slide:k1", 2, 10_000);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.unavailable).toBeUndefined();
+    expect(blocked.retryAfterSec).toBe(6);
+
+    // Advance past t=10s so the first hit slides out while second hit (t=4s) remains
+    vi.advanceTimersByTime(6_100);
+    expect(await checkRateLimit("slide:k1", 2, 10_000)).toEqual({
+      allowed: true,
+    });
+  });
+
+  it("fails closed with unavailable=true and retryAfterSec=5 when KV errors in production", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.KV_REST_API_URL = "https://mock-rl.upstash.io";
+    process.env.KV_REST_API_TOKEN = "mock-token";
+    resetMemoryStoreForTests();
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("Upstash outage"));
+
+    try {
+      const res = await checkRateLimit("prod:outage", 6, 60_000);
+      expect(res).toEqual({
+        allowed: false,
+        unavailable: true,
+        retryAfterSec: 5,
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

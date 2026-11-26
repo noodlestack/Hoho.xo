@@ -6,6 +6,14 @@ import {
   type ReportReason,
   type TreeMessage,
 } from "./messages";
+import {
+  checkRateLimit,
+  getGlobalMsgLimit,
+  getHandleHourlyLimit,
+  RATE_LIMIT_POLICY,
+  resetRateLimitForTests,
+  type RateLimitResult,
+} from "./rate-limit";
 import { resolveTreeOrnaments } from "./qr-tree";
 import {
   createStoreAdapters,
@@ -30,6 +38,13 @@ import { isTreeThemeId } from "./tree-themes";
 
 export const OWNER_COOKIE_PREFIX = "hoho_owner_";
 
+export {
+  checkRateLimit,
+  getGlobalMsgLimit,
+  getHandleHourlyLimit,
+  RATE_LIMIT_POLICY,
+  type RateLimitResult,
+};
 export type { StoredTreeRecord, MailSummary };
 
 export interface PublicOrnamentStub {
@@ -63,7 +78,6 @@ const VALID_REPORT_REASONS = new Set<ReportReason>([
 interface SharedStoreState {
   memoryTrees: Map<string, StoredTreeRecord>;
   idempotency: Map<string, Map<string, IdempotencyEntry>>;
-  rateBuckets: Map<string, number[]>;
   fsUnavailable: boolean;
   adapters?: StoreAdapters;
 }
@@ -99,7 +113,6 @@ function getSharedState(): SharedStoreState {
     globalForHohoStore.__hohoSharedStore = {
       memoryTrees: new Map<string, StoredTreeRecord>(),
       idempotency: new Map<string, Map<string, IdempotencyEntry>>(),
-      rateBuckets: new Map<string, number[]>(),
       fsUnavailable: false,
     };
   }
@@ -132,8 +145,8 @@ export function resetMemoryStoreForTests(): void {
   const state = getSharedState();
   state.memoryTrees.clear();
   state.idempotency.clear();
-  state.rateBuckets.clear();
   state.fsUnavailable = false;
+  resetRateLimitForTests();
 }
 
 export function generateOwnerToken(): string {
@@ -246,67 +259,6 @@ export function getClientIpHash(request: Request): string {
   const ip = resolveTrustedClientIp(request);
   const salt = getIpSalt();
   return crypto.createHmac("sha256", salt).update(ip).digest("hex").slice(0, 32);
-}
-
-async function kvCommand(args: Array<string | number>): Promise<unknown> {
-  const env = getKvEnv();
-  if (!env) return null;
-  const res = await fetch(env.url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(args),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`KV command failed (${res.status})`);
-  }
-  const json = (await res.json()) as { result?: unknown };
-  return json.result ?? null;
-}
-
-export async function checkRateLimit(
-  bucketKey: string,
-  maxHits: number,
-  windowMs: number,
-): Promise<{ allowed: boolean; retryAfterSec?: number }> {
-  const kv = getKvEnv();
-  if (kv) {
-    try {
-      const key = `hoho:rl:${bucketKey}:${Math.floor(Date.now() / windowMs)}`;
-      const count = Number(await kvCommand(["INCR", key]));
-      if (count === 1) {
-        await kvCommand(["PEXPIRE", key, windowMs]);
-      }
-      if (count > maxHits) {
-        return {
-          allowed: false,
-          retryAfterSec: Math.max(1, Math.ceil(windowMs / 1000)),
-        };
-      }
-      return { allowed: true };
-    } catch {
-      // Replaced by sliding-window limiter in Task 1.4
-    }
-  }
-
-  const state = getSharedState();
-  const now = Date.now();
-  const cutoff = now - windowMs;
-  const existing = (state.rateBuckets.get(bucketKey) ?? []).filter(
-    (ts) => ts > cutoff,
-  );
-  if (existing.length >= maxHits) {
-    const oldest = existing[0] ?? now;
-    const retryAfterSec = Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
-    state.rateBuckets.set(bucketKey, existing);
-    return { allowed: false, retryAfterSec };
-  }
-  existing.push(now);
-  state.rateBuckets.set(bucketKey, existing);
-  return { allowed: true };
 }
 
 export function sanitizeConfigPatch(
