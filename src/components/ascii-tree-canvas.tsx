@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { gsap } from "@/lib/gsap-init";
 import type { TreeMessage } from "@/lib/messages";
 import {
   generateQrTreeCloud,
@@ -248,6 +249,50 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
     startedAt: 0,
   });
   const hoveredIdRef = useRef<string | null>(null);
+  const growStateRef = useRef({
+    foliage: reducedMotion ? 1 : 0,
+    garland: reducedMotion ? 1 : 0,
+    lights: reducedMotion ? 1 : 0,
+    starScale: reducedMotion ? 1 : 0,
+  });
+
+  useEffect(() => {
+    const grow = growStateRef.current;
+    if (reducedMotion) {
+      grow.foliage = 1;
+      grow.garland = 1;
+      grow.lights = 1;
+      grow.starScale = 1;
+      drawNowRef.current();
+      return;
+    }
+
+    grow.foliage = 0;
+    grow.garland = 0;
+    grow.lights = 0;
+    grow.starScale = 0;
+
+    const tl = gsap.timeline();
+    tl.to(grow, { foliage: 1, duration: 0.9, ease: "power3.out" }, 0)
+      .to(grow, { garland: 1, duration: 0.8, ease: "power3.out" }, 0.3)
+      .to(grow, { lights: 1, duration: 0.7, ease: "power2.out" }, 0.5)
+      .to(grow, { starScale: 1.15, duration: 0.32, ease: "back.out(2)" }, 0.9)
+      .to(grow, { starScale: 1, duration: 0.18, ease: "power2.out" }, 1.22);
+
+    const skip = () => {
+      if (tl.progress() < 1) {
+        tl.progress(1);
+      }
+    };
+    window.addEventListener("pointerdown", skip, { once: true, passive: true });
+    window.addEventListener("keydown", skip, { once: true, passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", skip);
+      window.removeEventListener("keydown", skip);
+      tl.kill();
+    };
+  }, [reducedMotion]);
 
   useEffect(() => {
     if (!latestDroppedId || reducedMotion) return;
@@ -773,9 +818,14 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
       let lightPassCount = 0;
       const maxSparseLights = Math.floor(curCloud.length * 0.07);
 
+      const grow = growStateRef.current;
+
       if (glyphAlpha > 0.02) {
         for (let i = 0; i < curCloud.length; i += 1) {
           const pt = curCloud[i];
+          if (pt.kind !== "ground" && grow.foliage < 0.999) {
+            if (pt.y > TREE_HEIGHT * grow.foliage) continue;
+          }
 
           const swayX =
             pt.kind === "ground"
@@ -826,23 +876,31 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
             lightPassCount < maxSparseLights &&
             pt.glyphIdx % 3 === 0
           ) {
-            lightPassCount += 1;
-            const pulse = curReduced
-              ? 0.9
-              : 0.55 + 0.45 * Math.sin(tSec * 1.6 + pt.twinklePhase);
-            const lColor =
-              curTheme.lights[pt.lightIdx % curTheme.lights.length] ??
-              curTheme.garland;
-            glyphBuf[cIdx] = pulse > 0.78 ? "O" : "*";
-            colorBuf[cIdx] = lColor;
-            alphaBuf[cIdx] = (0.72 + 0.28 * pulse) * glyphAlpha;
-            if (pulse > 0.88 && st.qrMix < 0.2 && dz > -0.5) {
-              brightLightHalos.push({
-                x: (col + 0.5) * cellW,
-                y: (row + 0.5) * cellH,
-                color: lColor,
-                alpha: (pulse - 0.85) * 2.2 * glyphAlpha,
-              });
+            const lightAlpha = Math.max(
+              0,
+              Math.min(1, grow.lights * 1.4 - (pt.y / TREE_HEIGHT) * 0.4),
+            );
+            if (lightAlpha <= 0.02) {
+              // Wait until light intro wave reaches this tier
+            } else {
+              lightPassCount += 1;
+              const pulse = curReduced
+                ? 0.9
+                : 0.55 + 0.45 * Math.sin(tSec * 1.6 + pt.twinklePhase);
+              const lColor =
+                curTheme.lights[pt.lightIdx % curTheme.lights.length] ??
+                curTheme.garland;
+              glyphBuf[cIdx] = pulse > 0.78 ? "O" : "*";
+              colorBuf[cIdx] = lColor;
+              alphaBuf[cIdx] = (0.72 + 0.28 * pulse) * glyphAlpha * lightAlpha;
+              if (pulse > 0.88 && st.qrMix < 0.2 && dz > -0.5) {
+                brightLightHalos.push({
+                  x: (col + 0.5) * cellW,
+                  y: (row + 0.5) * cellH,
+                  color: lColor,
+                  alpha: (pulse - 0.85) * 2.2 * glyphAlpha * lightAlpha,
+                });
+              }
             }
           } else {
             // Single-hue volumetric Lambert term from slowly orbiting light
@@ -887,7 +945,8 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           const tDepth =
             curShape === "layered" ? 0.46 : curShape === "wide" ? 0.22 : 0.34;
           const steps = isCompact ? 130 : 190;
-          for (let s = 0; s <= steps; s += 1) {
+          const maxGarlandStep = Math.floor(steps * grow.garland);
+          for (let s = 0; s <= maxGarlandStep; s += 1) {
             const frac = 0.07 + (s / steps) * 0.86;
             const y = 0.55 + frac * (TREE_HEIGHT * hMult - 0.75);
             const tierPhase = (frac * tiers) % 1;
@@ -957,16 +1016,21 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
         ctx.globalAlpha = 1;
 
         // 4. Analytically rendered Editable Apex Topper (sways minimally)
-        const apexSwayX =
-          Math.pow(TREE_HEIGHT, 1.5) * 0.002 * windWave;
-        const apex = project3D(apexSwayX, TREE_HEIGHT + 0.42, 0);
-        const starGlow = curReduced
-          ? 1
-          : 0.82 + 0.18 * Math.sin(tSec * 2.2);
-        const starRadiusPx = Math.max(15, activeScale * 0.5);
+        if (grow.starScale > 0.02) {
+          const apexSwayX =
+            Math.pow(TREE_HEIGHT, 1.5) * 0.002 * windWave;
+          const apex = project3D(apexSwayX, TREE_HEIGHT + 0.42, 0);
+          const starGlow = curReduced
+            ? 1
+            : 0.82 + 0.18 * Math.sin(tSec * 2.2);
+          const starRadiusPx = Math.max(15, activeScale * 0.5);
 
-        ctx.save();
-        ctx.globalAlpha = starGlow * glyphAlpha;
+          ctx.save();
+          ctx.translate(apex.sx, apex.sy);
+          ctx.scale(grow.starScale, grow.starScale);
+          ctx.translate(-apex.sx, -apex.sy);
+          ctx.globalAlpha =
+            starGlow * glyphAlpha * Math.min(1, grow.starScale);
         const haloRgba =
           curTopper === "heart"
             ? "rgba(255, 143, 177, 0.36)"
@@ -1116,6 +1180,7 @@ export const AsciiTreeCanvas = memo(function AsciiTreeCanvas({
           }
         }
         ctx.restore();
+        }
       }
 
       // 5. Seamless Dark-Canvas Scannable QR Plate (xmasqr-style, strict 4-module quiet zone)

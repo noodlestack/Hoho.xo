@@ -30,6 +30,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { gsap, SplitText, useGSAP } from "@/lib/gsap-init";
 import {
   AsciiTreeCanvas,
   type CameraViewMode,
@@ -506,6 +507,114 @@ export function HohoExperience({
     const clean = config.displayName.trim() || activeHandle;
     return clean.charAt(0).toUpperCase() || "H";
   }, [activeHandle, config.avatar, config.displayName]);
+
+  useGSAP(
+    () => {
+      const card = visitorCardRef.current;
+      if (!card) return;
+
+      if (reducedMotion) {
+        gsap.fromTo(
+          card,
+          { opacity: 0 },
+          { opacity: 1, duration: 0.12, ease: "power1.out", clearProps: "opacity" },
+        );
+        return;
+      }
+
+      const tl = gsap.timeline();
+      tl.from(card, {
+        y: 24,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power3.out",
+        clearProps: "transform,opacity",
+      });
+
+      const directChildren = Array.from(card.children);
+      if (directChildren.length > 0) {
+        tl.from(
+          directChildren,
+          {
+            y: 12,
+            opacity: 0,
+            duration: 0.45,
+            stagger: 0.05,
+            ease: "power3.out",
+            clearProps: "transform,opacity",
+          },
+          0.08,
+        );
+      }
+
+      const promptEl = card.querySelector<HTMLElement>(".bio-prompt-text");
+      let split: SplitText | null = null;
+      if (promptEl && promptEl.textContent?.trim()) {
+        try {
+          split = SplitText.create(promptEl, { type: "lines" });
+          if (split.lines.length > 0) {
+            tl.from(
+              split.lines,
+              {
+                y: 14,
+                opacity: 0,
+                duration: 0.5,
+                stagger: 0.08,
+                ease: "expo.out",
+                clearProps: "transform,opacity",
+                onComplete: () => {
+                  split?.revert();
+                },
+              },
+              0.14,
+            );
+          }
+        } catch {
+          split = null;
+        }
+      }
+
+      const statEls = card.querySelectorAll<HTMLElement>("[data-count-value]");
+      statEls.forEach((el) => {
+        const targetVal = Number(el.dataset.countValue ?? "0");
+        if (Number.isFinite(targetVal) && targetVal > 0) {
+          const counter = { val: 0 };
+          tl.to(
+            counter,
+            {
+              val: targetVal,
+              duration: 0.5,
+              ease: "power1.out",
+              snap: { val: 1 },
+              onUpdate: () => {
+                el.textContent = String(Math.round(counter.val));
+              },
+              onComplete: () => {
+                el.textContent = String(targetVal);
+              },
+            },
+            0.22,
+          );
+        }
+      });
+
+      const skip = () => {
+        if (tl.progress() < 1) {
+          tl.progress(1);
+          split?.revert();
+        }
+      };
+      window.addEventListener("pointerdown", skip, { once: true, passive: true });
+      window.addEventListener("keydown", skip, { once: true, passive: true });
+
+      return () => {
+        window.removeEventListener("pointerdown", skip);
+        window.removeEventListener("keydown", skip);
+        split?.revert();
+      };
+    },
+    { scope: visitorCardRef, dependencies: [reducedMotion] },
+  );
 
   const persistMessagesLocal = useCallback(
     (updater: (prev: TreeMessage[]) => TreeMessage[]) => {
@@ -1466,11 +1575,21 @@ export function HohoExperience({
                 ) : (
                   <div className="share-stats-row">
                     <div className="share-stat-cell">
-                      <span className="share-stat-value">{visibleCount}</span>
+                      <span
+                        className="share-stat-value"
+                        data-count-value={visibleCount}
+                      >
+                        {visibleCount}
+                      </span>
                       <span className="share-stat-label">On tree</span>
                     </div>
                     <div className="share-stat-cell">
-                      <span className="share-stat-value">{messages.length}</span>
+                      <span
+                        className="share-stat-value"
+                        data-count-value={messages.length}
+                      >
+                        {messages.length}
+                      </span>
                       <span className="share-stat-label">Total</span>
                     </div>
                     <div className="share-stat-cell">
@@ -1481,7 +1600,7 @@ export function HohoExperience({
                             aria-hidden="true"
                           />
                         ) : null}
-                        <span>{unreadCount}</span>
+                        <span data-count-value={unreadCount}>{unreadCount}</span>
                       </span>
                       <span className="share-stat-label">Unread</span>
                     </div>
