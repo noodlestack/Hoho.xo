@@ -6,32 +6,67 @@ import { parseHandle } from "@/lib/tree-config";
 
 export const dynamic = "force-dynamic";
 
+function formatTreePageTitle(safeHandle: string, displayName?: string): string {
+  const cleanName = displayName?.trim() ?? "";
+  if (
+    !cleanName ||
+    cleanName.toLowerCase() === `@${safeHandle}` ||
+    cleanName.toLowerCase() === safeHandle
+  ) {
+    return `@${safeHandle} — Send a Holiday Letter | Hoho.xo`;
+  }
+  return `${cleanName} (@${safeHandle}) — Hoho.xo`;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ handle: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { handle } = await params;
+  const sp = searchParams ? await searchParams : {};
   const safeHandle = parseHandle(handle);
   if (!safeHandle) {
-    return {
-      title: "Tree not found — Hoho.xo",
-      description: "This tree handle is invalid or unavailable.",
-      robots: {
-        index: false,
-        follow: false,
-      },
-    };
+    notFound();
   }
+
   const record = await getTreeRecord(safeHandle).catch(() => null);
-  const displayName = record?.config.displayName || `@${safeHandle}`;
-  const prompt =
+  const hasPortablePreview = typeof sp.tree === "string" && sp.tree.length > 0;
+  if (!record && !hasPortablePreview) {
+    notFound();
+  }
+
+  const nameFromQuery = typeof sp.n === "string" ? sp.n : undefined;
+  const promptFromQuery = typeof sp.p === "string" ? sp.p : undefined;
+  const title = formatTreePageTitle(
+    safeHandle,
+    record?.config.displayName ?? nameFromQuery,
+  );
+  const description =
     record?.config.prompt ||
-    "Send an anonymous note to hang on this interactive 3D ASCII Christmas tree.";
+    promptFromQuery ||
+    `Send an anonymous holiday letter to hang as an ornament on @${safeHandle}'s Christmas tree.`;
 
   return {
-    title: `${displayName} (@${safeHandle}) — Hoho.xo`,
-    description: prompt,
+    title,
+    description,
+    alternates: {
+      canonical: `/t/${safeHandle}`,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `/t/${safeHandle}`,
+      siteName: "Hoho.xo",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
     robots: {
       index: false,
       follow: false,
@@ -41,15 +76,22 @@ export async function generateMetadata({
 
 export default async function PublicTreePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ handle: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { handle } = await params;
+  const sp = searchParams ? await searchParams : {};
   const safeHandle = parseHandle(handle);
   if (!safeHandle) {
     notFound();
   }
   const record = await getTreeRecord(safeHandle).catch(() => null);
+  const hasPortablePreview = typeof sp.tree === "string" && sp.tree.length > 0;
+  if (!record && !hasPortablePreview) {
+    notFound();
+  }
   const initialPublicTree = toPublicTreeData(record ?? safeHandle);
 
   return (

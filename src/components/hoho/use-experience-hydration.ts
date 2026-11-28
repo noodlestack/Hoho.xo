@@ -12,7 +12,7 @@ import {
   type PublicTreeApiResponse,
   type StudioTab,
 } from "@/components/hoho/experience-helpers";
-import { gsap, SplitText, useGSAP } from "@/lib/gsap-init";
+import { gsap, useGSAP } from "@/lib/gsap-init";
 import { loadStoredMessages, type TreeMessage } from "@/lib/messages";
 import type { PublicTreeData } from "@/lib/server-store";
 import { stopChristmasMusic } from "@/lib/sound";
@@ -47,16 +47,13 @@ interface UseExperienceHydrationOptions {
   setMessages: Dispatch<SetStateAction<TreeMessage[]>>;
   setServerSynced: Dispatch<SetStateAction<boolean>>;
   setOwnerKey: Dispatch<SetStateAction<string>>;
+  setAuthChecking: Dispatch<SetStateAction<boolean>>;
   setNoteBody: Dispatch<SetStateAction<string>>;
   setPublicTotalVisible: Dispatch<SetStateAction<number | null>>;
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>;
   setIsMobileViewport: Dispatch<SetStateAction<boolean>>;
   seedKnownMessages: (next: TreeMessage[]) => void;
-  claimOrSyncOwner: (
-    targetHandle: string,
-    unlockKey?: string,
-    fallbackConfig?: TreeConfig,
-  ) => Promise<boolean>;
+  checkSession: (targetHandle: string) => Promise<boolean>;
 }
 
 /** Handles initial client hydration, responsive viewport tracking, shortcut dismissal, and card GSAP entrance. */
@@ -82,12 +79,13 @@ export function useExperienceHydration({
   setMessages,
   setServerSynced,
   setOwnerKey,
+  setAuthChecking,
   setNoteBody,
   setPublicTotalVisible,
   setShortcutsOpen,
   setIsMobileViewport,
   seedKnownMessages,
-  claimOrSyncOwner,
+  checkSession,
 }: UseExperienceHydrationOptions) {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -131,27 +129,35 @@ export function useExperienceHydration({
         ? (loadActiveOwnerHandle() ?? "")
         : (parseHandle(initialHandle ?? "") ?? "");
 
-      setActiveHandle(resolvedHandle);
-      setHandleDraft(resolvedHandle);
-
       if (isOwnerMode) {
         if (!resolvedHandle) {
-          setStudioTab("prompt");
+          setActiveHandle("");
+          setHandleDraft("");
+          setStudioTab("share");
           setConfig(defaultTreeConfig(""));
           setMessages([]);
           setServerSynced(false);
+          setAuthChecking(false);
           hydratedRef.current = true;
           return;
         }
         const storedConfig = loadTreeConfig(resolvedHandle);
         setOwnerKey("");
+        setHandleDraft(resolvedHandle);
         setConfig(storedConfig);
         const initialStored = loadStoredMessages(resolvedHandle);
         seedKnownMessages(initialStored);
         setMessages(initialStored);
         hydratedRef.current = true;
-        await claimOrSyncOwner(resolvedHandle, undefined, storedConfig);
+        const verified = await checkSession(resolvedHandle);
+        if (!verified && !cancelled) {
+          setActiveHandle("");
+          setMessages([]);
+          setServerSynced(false);
+        }
       } else if (resolvedHandle) {
+        setActiveHandle(resolvedHandle);
+        setHandleDraft(resolvedHandle);
         const storedConfig = loadTreeConfig(resolvedHandle);
         const savedDraft = readVisitorDraft(resolvedHandle);
         if (savedDraft) {
@@ -197,13 +203,14 @@ export function useExperienceHydration({
       window.removeEventListener("offline", handleOffline);
     };
   }, [
-    claimOrSyncOwner,
+    checkSession,
     hydratedRef,
     initialHandle,
     initialPublicTree,
     isOwnerMode,
     seedKnownMessages,
     setActiveHandle,
+    setAuthChecking,
     setConfig,
     setDaysToChristmas,
     setHandleDraft,
@@ -249,6 +256,7 @@ export function useExperienceHydration({
     return () => mobileMq.removeEventListener("change", syncMobile);
   }, [setIsMobileViewport]);
 
+  // Animate card entrance without mutating React-owned text nodes (fixes BUG-01 stale prompt)
   useGSAP(
     () => {
       const card = visitorCardRef.current;
@@ -259,79 +267,15 @@ export function useExperienceHydration({
       }
       const tl = gsap.timeline();
       tl.from(card, {
-        y: 24,
+        y: 18,
         opacity: 0,
-        duration: 0.6,
+        duration: 0.45,
         ease: "power3.out",
         clearProps: "transform,opacity",
-      });
-      const directChildren = Array.from(card.children);
-      if (directChildren.length > 0) {
-        tl.from(
-          directChildren,
-          {
-            y: 12,
-            opacity: 0,
-            duration: 0.45,
-            stagger: 0.05,
-            ease: "power3.out",
-            clearProps: "transform,opacity",
-          },
-          0.08,
-        );
-      }
-      const promptEl = card.querySelector<HTMLElement>(".bio-prompt-text");
-      let split: SplitText | null = null;
-      if (promptEl && promptEl.textContent?.trim()) {
-        try {
-          split = SplitText.create(promptEl, { type: "lines", aria: "none" });
-          if (split.lines.length > 0) {
-            tl.from(
-              split.lines,
-              {
-                y: 14,
-                opacity: 0,
-                duration: 0.5,
-                stagger: 0.08,
-                ease: "expo.out",
-                clearProps: "transform,opacity",
-                onComplete: () => {
-                  split?.revert();
-                },
-              },
-              0.14,
-            );
-          }
-        } catch {
-          split = null;
-        }
-      }
-      card.querySelectorAll<HTMLElement>("[data-count-value]").forEach((el) => {
-        const targetVal = Number(el.dataset.countValue ?? "0");
-        if (Number.isFinite(targetVal) && targetVal > 0) {
-          const counter = { val: 0 };
-          tl.to(
-            counter,
-            {
-              val: targetVal,
-              duration: 0.5,
-              ease: "power1.out",
-              snap: { val: 1 },
-              onUpdate: () => {
-                el.textContent = String(Math.round(counter.val));
-              },
-              onComplete: () => {
-                el.textContent = String(targetVal);
-              },
-            },
-            0.22,
-          );
-        }
       });
       const skip = () => {
         if (tl.progress() < 1) {
           tl.progress(1);
-          split?.revert();
         }
       };
       window.addEventListener("pointerdown", skip, {
@@ -342,7 +286,6 @@ export function useExperienceHydration({
       return () => {
         window.removeEventListener("pointerdown", skip);
         window.removeEventListener("keydown", skip);
-        split?.revert();
       };
     },
     { scope: visitorCardRef, dependencies: [reducedMotion] },

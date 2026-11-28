@@ -1,11 +1,13 @@
 "use client";
 
+import { Mail } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AsciiTreeCanvas,
   type CameraViewMode,
 } from "@/components/ascii-tree-canvas";
+import { ChristmasPlaylistSheet } from "@/components/christmas-playlist";
 import {
   PanelFooter,
   SidebarTopbar,
@@ -15,6 +17,7 @@ import type { StudioTab } from "@/components/hoho/experience-helpers";
 import { MobileOwnerSheet } from "@/components/hoho/mobile-owner-sheet";
 import { MobileVisitorSheet } from "@/components/hoho/mobile-visitor-sheet";
 import { OwnerModals } from "@/components/hoho/owner-modals";
+import { OwnerOnboardingCard } from "@/components/hoho/owner-onboarding-card";
 import { OwnerStudioPanel } from "@/components/hoho/owner-studio-panel";
 import { StageDockFooter } from "@/components/hoho/stage-dock-footer";
 import { useExperienceControls } from "@/components/hoho/use-experience-controls";
@@ -87,6 +90,7 @@ export function HohoExperience({
   );
 
   const [mailOpen, setMailOpen] = useState<boolean>(false);
+  const [playlistOpen, setPlaylistOpen] = useState<boolean>(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [latestDroppedId, setLatestDroppedId] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
@@ -142,6 +146,7 @@ export function HohoExperience({
     setConfig,
     setMessages,
     setServerSynced,
+    soundEnabled,
     seedKnownMessages,
     resetMailTracking,
     showToast,
@@ -225,12 +230,13 @@ export function HohoExperience({
     setMessages,
     setServerSynced,
     setOwnerKey: ownerSession.setOwnerKey,
+    setAuthChecking: ownerSession.setAuthChecking,
     setNoteBody: visitor.setNoteBody,
     setPublicTotalVisible,
     setShortcutsOpen,
     setIsMobileViewport,
     seedKnownMessages,
-    claimOrSyncOwner: ownerSession.claimOrSyncOwner,
+    checkSession: ownerSession.checkSession,
   });
 
   useKeyboardShortcuts({
@@ -257,11 +263,44 @@ export function HohoExperience({
 
   const handleOpenMail = useCallback(() => {
     setMailOpen(true);
-    if (serverSyncedRef.current) void refreshOwnerMail(activeHandle);
+    if (serverSyncedRef.current && activeHandle) {
+      void refreshOwnerMail(activeHandle);
+    }
   }, [activeHandle, refreshOwnerMail]);
+
+  const onboardingProps = {
+    initialHandle: ownerSession.handleDraft,
+    config,
+    origin,
+    authSubmitting: ownerSession.authSubmitting,
+    authError: ownerSession.ownerClaimError,
+    clearAuthError: () => ownerSession.setOwnerClaimError(""),
+    onHandleDraftChange: ownerSession.setHandleDraft,
+    onPreviewConfigChange: controls.updateConfig,
+    onRegister: async (input: {
+      handle: string;
+      displayName: string;
+      password: string;
+      configOverride?: Partial<TreeConfig>;
+    }) => {
+      const ok = await ownerSession.registerTreeAccount(input);
+      if (ok) {
+        setStudioTab("share");
+      }
+      return ok;
+    },
+    onLogin: async (input: { handle: string; password: string }) => {
+      const ok = await ownerSession.loginTreeAccount(input);
+      if (ok) {
+        setStudioTab("share");
+      }
+      return ok;
+    },
+  };
 
   const navChromeProps = {
     isOwnerMode,
+    isAuthenticated: ownerSession.isAuthenticated,
     visitorRelativeHref: controls.visitorRelativeHref,
     messagesCount: messages.length,
     unreadCount: controls.unreadCount,
@@ -269,7 +308,9 @@ export function HohoExperience({
     musicPlaying: controls.musicPlaying,
     currentTrack: controls.currentTrack,
     onToggleMusic: controls.handleToggleMusic,
+    onOpenPlaylist: () => setPlaylistOpen(true),
     onOpenMail: handleOpenMail,
+    onOpenMobileAuth: () => setMobileSheetOpen(true),
   };
 
   return (
@@ -294,7 +335,7 @@ export function HohoExperience({
 
         <main className="stage-container">
           <AsciiTreeCanvas
-            handle={activeHandle}
+            handle={controls.effectiveHandle}
             qrValue={controls.shareUrl}
             matrix={controls.qrMatrix}
             theme={theme}
@@ -311,9 +352,10 @@ export function HohoExperience({
             reducedMotion={reducedMotion || staticMode}
             staticMode={staticMode}
             supporter={Boolean(config.supporter)}
-            isOwnerMode={isOwnerMode}
+            isOwnerMode={isOwnerMode && ownerSession.isAuthenticated}
             paused={
               mailOpen ||
+              playlistOpen ||
               Boolean(activeMessageId) ||
               inviteSheetOpen ||
               supportOpen ||
@@ -334,7 +376,7 @@ export function HohoExperience({
           shortcutsOpen={shortcutsOpen}
           setShortcutsOpen={setShortcutsOpen}
           shortcutsWrapRef={shortcutsWrapRef}
-          isOwnerMode={isOwnerMode}
+          isOwnerMode={isOwnerMode && ownerSession.isAuthenticated}
           theme={theme}
           showOrnaments={config.showOrnaments}
           resolvedOrnaments={controls.resolvedOrnaments}
@@ -355,8 +397,10 @@ export function HohoExperience({
             className="social-card"
             aria-label={
               isOwnerMode
-                ? "Owner tree creator hub"
-                : `Send an anonymous note to @${activeHandle}`
+                ? ownerSession.isAuthenticated
+                  ? "Owner tree creator hub"
+                  : "Create or sign in to your holiday tree"
+                : `Send an anonymous holiday letter to @${activeHandle}`
             }
           >
             {!isOnline ? (
@@ -364,59 +408,64 @@ export function HohoExperience({
                 Offline — changes will sync when reconnected
               </div>
             ) : null}
+
             {isOwnerMode ? (
-              <OwnerStudioPanel
-                studioTab={studioTab}
-                setStudioTab={setStudioTab}
-                ownerClaimError={ownerSession.ownerClaimError}
-                activeHandle={activeHandle}
-                config={config}
-                updateConfig={controls.updateConfig}
-                avatarGlyph={controls.avatarGlyph}
-                daysToChristmas={daysToChristmas}
-                serverSynced={serverSynced}
-                shareUrl={controls.shareUrl}
-                visitorRelativeHref={controls.visitorRelativeHref}
-                copiedLink={controls.copiedLink}
-                onCopyLink={controls.handleCopyLink}
-                onCopyText={controls.handleCopyText}
-                onOpenInviteSheet={() => {
-                  setMobileSheetOpen(false);
-                  setInviteSheetOpen(true);
-                }}
-                viewMode={viewMode}
-                onToggleQrView={() =>
-                  controls.changeViewMode((prev) =>
-                    prev === "qr" ? "tree" : "qr",
-                  )
-                }
-                pushSubscribed={pushSub.pushSubscribed}
-                pushBusy={pushSub.pushBusy}
-                iosNeedsStandalone={pushSub.iosNeedsStandalone}
-                onTogglePush={pushSub.handleTogglePush}
-                unreadCount={controls.unreadCount}
-                newestUnread={controls.newestUnread}
-                onOpenMessage={mailActions.handleOpenMessage}
-                messagesCount={messages.length}
-                visibleCount={controls.visibleCount}
-                currentTrack={controls.currentTrack}
-                musicPlaying={controls.musicPlaying}
-                onToggleMusic={controls.handleToggleMusic}
-                onNextTrack={controls.handleNextTrack}
-                soundEnabled={soundEnabled}
-                onToggleSound={setSoundEnabled}
-                handleDraft={ownerSession.handleDraft}
-                setHandleDraft={ownerSession.setHandleDraft}
-                commitHandleChange={ownerSession.commitHandleChange}
-                hasInvalidHandleDraft={controls.hasInvalidHandleDraft}
-                hasPendingHandleChange={controls.hasPendingHandleChange}
-                pendingHandleSlug={controls.pendingHandleSlug}
-                onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
-                ownerKey={ownerSession.ownerKey}
-                unlockDraft={ownerSession.unlockDraft}
-                setUnlockDraft={ownerSession.setUnlockDraft}
-                handleUnlockWithKey={ownerSession.handleUnlockWithKey}
-              />
+              ownerSession.authChecking ? (
+                <div
+                  className="flex flex-col gap-3 py-2"
+                  aria-label="Loading session"
+                >
+                  <div className="loading-shimmer loading-card-block" />
+                  <div className="loading-shimmer loading-textarea-block" />
+                  <div className="loading-shimmer loading-btn-block" />
+                </div>
+              ) : ownerSession.isAuthenticated ? (
+                <OwnerStudioPanel
+                  studioTab={studioTab}
+                  setStudioTab={setStudioTab}
+                  activeHandle={activeHandle}
+                  config={config}
+                  updateConfig={controls.updateConfig}
+                  avatarGlyph={controls.avatarGlyph}
+                  daysToChristmas={daysToChristmas}
+                  shareUrl={controls.shareUrl}
+                  visitorRelativeHref={controls.visitorRelativeHref}
+                  copiedLink={controls.copiedLink}
+                  onCopyLink={controls.handleCopyLink}
+                  onOpenInviteSheet={() => {
+                    setMobileSheetOpen(false);
+                    setInviteSheetOpen(true);
+                  }}
+                  viewMode={viewMode}
+                  onToggleQrView={() =>
+                    controls.changeViewMode((prev) =>
+                      prev === "qr" ? "tree" : "qr",
+                    )
+                  }
+                  pushSubscribed={pushSub.pushSubscribed}
+                  pushBusy={pushSub.pushBusy}
+                  iosNeedsStandalone={pushSub.iosNeedsStandalone}
+                  onTogglePush={pushSub.handleTogglePush}
+                  unreadCount={controls.unreadCount}
+                  newestUnread={controls.newestUnread}
+                  onOpenMessage={mailActions.handleOpenMessage}
+                  messagesCount={messages.length}
+                  visibleCount={controls.visibleCount}
+                  currentTrack={controls.currentTrack}
+                  musicPlaying={controls.musicPlaying}
+                  onToggleMusic={controls.handleToggleMusic}
+                  onNextTrack={controls.handleNextTrack}
+                  onOpenPlaylist={() => setPlaylistOpen(true)}
+                  soundEnabled={soundEnabled}
+                  onToggleSound={setSoundEnabled}
+                  onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
+                  hasPassword={ownerSession.hasPassword}
+                  onUpdatePassword={ownerSession.updateOwnerPassword}
+                  onLogout={ownerSession.logoutOwner}
+                />
+              ) : (
+                <OwnerOnboardingCard {...onboardingProps} />
+              )
             ) : (
               <VisitorComposePanel
                 activeHandle={activeHandle}
@@ -458,6 +507,7 @@ export function HohoExperience({
         <MobileOwnerSheet
           open={mobileSheetOpen}
           onOpenChange={setMobileSheetOpen}
+          isAuthenticated={ownerSession.isAuthenticated}
           isOnline={isOnline}
           studioTab={studioTab}
           setStudioTab={setStudioTab}
@@ -469,26 +519,23 @@ export function HohoExperience({
           onCopyLink={controls.handleCopyLink}
           messagesCount={messages.length}
           onOpenInviteSheet={() => setInviteSheetOpen(true)}
-          onOpenMail={() => setMailOpen(true)}
+          onOpenMail={handleOpenMail}
           onOpenSupport={() => setSupportOpen(true)}
+          onboardingProps={onboardingProps}
           currentTrack={controls.currentTrack}
           musicPlaying={controls.musicPlaying}
           onToggleMusic={controls.handleToggleMusic}
           onNextTrack={controls.handleNextTrack}
+          onOpenPlaylist={() => {
+            setMobileSheetOpen(false);
+            setPlaylistOpen(true);
+          }}
           soundEnabled={soundEnabled}
           onToggleSound={setSoundEnabled}
-          handleDraft={ownerSession.handleDraft}
-          setHandleDraft={ownerSession.setHandleDraft}
-          commitHandleChange={ownerSession.commitHandleChange}
-          hasInvalidHandleDraft={controls.hasInvalidHandleDraft}
-          hasPendingHandleChange={controls.hasPendingHandleChange}
-          pendingHandleSlug={controls.pendingHandleSlug}
           onCycleOwnerPrompt={controls.handleCycleOwnerPrompt}
-          ownerKey={ownerSession.ownerKey}
-          onCopyText={controls.handleCopyText}
-          unlockDraft={ownerSession.unlockDraft}
-          setUnlockDraft={ownerSession.setUnlockDraft}
-          handleUnlockWithKey={ownerSession.handleUnlockWithKey}
+          hasPassword={ownerSession.hasPassword}
+          onUpdatePassword={ownerSession.updateOwnerPassword}
+          onLogout={ownerSession.logoutOwner}
         />
       ) : null}
 
@@ -520,7 +567,12 @@ export function HohoExperience({
         />
       ) : null}
 
-      {isOwnerMode ? (
+      <ChristmasPlaylistSheet
+        open={playlistOpen}
+        onClose={() => setPlaylistOpen(false)}
+      />
+
+      {isOwnerMode && ownerSession.isAuthenticated ? (
         <OwnerModals
           mailOpen={mailOpen}
           setMailOpen={setMailOpen}
@@ -537,6 +589,7 @@ export function HohoExperience({
           activeHandle={activeHandle}
           config={config}
           setConfig={setConfig}
+          soundEnabled={soundEnabled}
           onOpenMessage={mailActions.handleOpenMessage}
           onCopyShareLink={controls.handleCopyLink}
           onMarkAllRead={mailActions.handleMarkAllRead}
@@ -552,14 +605,15 @@ export function HohoExperience({
       {flyingOrnament && !reducedMotion ? (
         <div
           ref={flyingOrnamentRef}
-          className="flying-ornament"
+          className="flying-ornament is-flying-mail"
           style={{
             color: flyingOrnament.color,
             borderColor: flyingOrnament.color,
           }}
           aria-hidden="true"
         >
-          {flyingOrnament.glyph}
+          <Mail size={16} strokeWidth={2.2} />
+          <span>{flyingOrnament.glyph}</span>
         </div>
       ) : null}
     </div>

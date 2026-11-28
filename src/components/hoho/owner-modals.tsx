@@ -1,30 +1,17 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import { MailDrawer } from "@/components/mail-drawer";
+import { MessageCardSheet } from "@/components/message-card-sheet";
+import { SupportSheet } from "@/components/support-sheet";
 import type { ReportReason, TreeMessage } from "@/lib/messages";
 import { saveTreeConfig, type TreeConfig } from "@/lib/tree-config";
 import type { TreeTheme } from "@/lib/tree-themes";
 
-const MailDrawer = dynamic(
-  () => import("@/components/mail-drawer").then((m) => m.MailDrawer),
-  { ssr: false },
-);
-
-const MessageCardSheet = dynamic(
-  () =>
-    import("@/components/message-card-sheet").then((m) => m.MessageCardSheet),
-  { ssr: false },
-);
-
 const InviteStorySheet = dynamic(
   () =>
     import("@/components/invite-story-sheet").then((m) => m.InviteStorySheet),
-  { ssr: false },
-);
-
-const SupportSheet = dynamic(
-  () => import("@/components/support-sheet").then((m) => m.SupportSheet),
   { ssr: false },
 );
 
@@ -44,6 +31,7 @@ interface OwnerModalsProps {
   activeHandle: string;
   config: TreeConfig;
   setConfig: Dispatch<SetStateAction<TreeConfig>>;
+  soundEnabled: boolean;
   onOpenMessage: (msg: TreeMessage) => void;
   onCopyShareLink: () => void;
   onMarkAllRead: () => Promise<void>;
@@ -55,7 +43,7 @@ interface OwnerModalsProps {
   showToast: (message: string, variant?: "success" | "info" | "error") => void;
 }
 
-/** Lazy-loaded owner modals and sheets for Mail, Message Card unwrap, Story Invite, and Support. */
+/** Owner modals and sheets for Mail, Holiday Letter unfold, Story Invite, and Support (eagerly mounted so Support/Mail open instantaneously — fixes OBS-08). */
 export function OwnerModals({
   mailOpen,
   setMailOpen,
@@ -72,6 +60,7 @@ export function OwnerModals({
   activeHandle,
   config,
   setConfig,
+  soundEnabled,
   onOpenMessage,
   onCopyShareLink,
   onMarkAllRead,
@@ -82,12 +71,18 @@ export function OwnerModals({
   onMarkReplied,
   showToast,
 }: OwnerModalsProps) {
+  const [unwrappedIds, setUnwrappedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
   return (
     <>
       <MailDrawer
         open={mailOpen}
         messages={messages}
         activeOrnamentIds={activeOrnamentIds}
+        christmasLock={config.christmasLock}
+        unwrappedIds={unwrappedIds}
         onClose={() => setMailOpen(false)}
         onOpenMessage={(msg) => {
           setMailOpen(false);
@@ -104,6 +99,9 @@ export function OwnerModals({
         displayName={config.displayName}
         prompt={config.prompt}
         christmasLock={config.christmasLock}
+        unwrappedIds={unwrappedIds}
+        onUnwrapId={(id) => setUnwrappedIds((prev) => new Set(prev).add(id))}
+        soundEnabled={soundEnabled}
         onClose={() => setActiveMessageId(null)}
         onSelectMessage={onOpenMessage}
         onDelete={onDelete}
@@ -125,9 +123,9 @@ export function OwnerModals({
           if (outcome === "shared") {
             showToast("Opened Story share sheet");
           } else if (outcome === "downloaded") {
-            showToast("Downloaded 1080×1920 IG Story Invite");
+            showToast("Downloaded Ultra-HD Invite PNG");
           } else {
-            showToast("Story invite share cancelled", "info");
+            showToast("Invite export cancelled", "info");
           }
         }}
       />

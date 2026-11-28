@@ -1,6 +1,6 @@
 "use client";
 
-import { Dices } from "lucide-react";
+import { Dices, Send } from "lucide-react";
 import Link from "next/link";
 import type {
   Dispatch,
@@ -74,6 +74,15 @@ export function MobileVisitorSheet({
   onVisitorDice,
   onSubmit,
 }: MobileVisitorSheetProps) {
+  const snapRatio =
+    typeof visitorSnap === "number" && visitorSnap > 0 && visitorSnap <= 1
+      ? visitorSnap
+      : 0.56;
+  const scrollBottomPadDvh = Math.max(
+    18,
+    Math.round((1 - snapRatio) * 100) + 3,
+  );
+
   return (
     <Drawer.Root
       open
@@ -123,6 +132,7 @@ export function MobileVisitorSheet({
                 )}
               </span>
               <span>
+                To @{activeHandle} ·{" "}
                 {selectedOrnament !== null
                   ? (ORNAMENT_TYPES[selectedOrnament]?.name ?? "Ornament")
                   : "Surprise"}
@@ -160,9 +170,14 @@ export function MobileVisitorSheet({
             </div>
           </div>
           <Drawer.Title className="sr-only">
-            Send anonymous note to @{activeHandle}
+            Send anonymous holiday letter to @{activeHandle}
           </Drawer.Title>
-          <div className="mobile-drawer-scroll">
+          <div
+            className="mobile-drawer-scroll"
+            style={{
+              paddingBottom: `calc(${scrollBottomPadDvh}dvh + env(safe-area-inset-bottom, 0px))`,
+            }}
+          >
             {!isOnline ? (
               <div className="offline-pill" role="status">
                 Offline — changes will sync when reconnected
@@ -170,12 +185,12 @@ export function MobileVisitorSheet({
             ) : null}
             {config.pauseInbox ? (
               <div className="paused-banner">
-                <strong>Inbox paused</strong>
+                <strong>Letterbox paused</strong>
                 <span>
-                  @{activeHandle} has paused new anonymous notes right now.
+                  @{activeHandle} has paused new holiday letters right now.
                 </span>
                 <Link href="/" className="make-tree-link">
-                  Make your own tree →
+                  Plant your own tree →
                 </Link>
               </div>
             ) : visitorSentOrnament ? (
@@ -199,18 +214,19 @@ export function MobileVisitorSheet({
                   Ornament hung on @{activeHandle}&apos;s tree!
                 </p>
                 <p className="anonymity-note">
-                  Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}.
-                  Only @{activeHandle} can unwrap it in Mail.
+                  Sealed anonymously inside a{" "}
+                  <strong>{sentOrnamentMeta?.name ?? "Bauble"}</strong>. Only @
+                  {activeHandle} can unfold it in Mail.
                 </p>
                 <Link href="/" className="primary-btn celebrate-hero-cta">
-                  <span>Get your own tree →</span>
+                  <span>Plant your own tree →</span>
                 </Link>
                 <button
                   type="button"
                   className="secondary-btn celebrate-again-btn"
                   onClick={() => setVisitorSentOrnament(null)}
                 >
-                  Send another
+                  Write another letter
                 </button>
               </div>
             ) : (
@@ -225,14 +241,15 @@ export function MobileVisitorSheet({
                   aria-hidden="true"
                   className="honeypot-field"
                 />
+                <p className="mobile-visitor-prompt">{config.prompt}</p>
                 <div className="compose-textarea-wrap">
                   <label htmlFor="mobile-visitor-note" className="sr-only">
-                    Send an anonymous note
+                    Write an anonymous holiday letter
                   </label>
                   <textarea
                     id="mobile-visitor-note"
                     className="compose-textarea visitor-mobile-textarea"
-                    placeholder={config.prompt}
+                    placeholder={`Write an anonymous letter to ${config.displayName || `@${activeHandle}`}...`}
                     maxLength={500}
                     value={noteBody}
                     onChange={(event) => {
@@ -246,7 +263,8 @@ export function MobileVisitorSheet({
                   <div className="compose-corner-bar">
                     <button
                       type="button"
-                      className="dice-btn"
+                      className="dice-btn is-touch-pill"
+                      aria-label="Insert a letter starter idea"
                       onClick={onVisitorDice}
                     >
                       <Dices size={14} strokeWidth={2} aria-hidden="true" />
@@ -291,18 +309,21 @@ export function MobileVisitorSheet({
                   className="primary-btn"
                   disabled={noteBody.trim().length === 0 || submittingNote}
                 >
-                  {submittingNote
-                    ? "Hanging ornament..."
-                    : "Send anonymous note"}
+                  <Send size={15} strokeWidth={2.1} aria-hidden="true" />
+                  <span>
+                    {submittingNote
+                      ? "Sealing & hanging..."
+                      : "Send anonymous note"}
+                  </span>
                 </button>
                 <div>
                   <span className="section-label">
-                    Prompt starters · @{activeHandle}
+                    Letter starters · @{activeHandle}
                   </span>
                   <div
                     className="prompt-chip-row"
                     role="group"
-                    aria-label="Prompt starter ideas"
+                    aria-label="Letter starter ideas"
                   >
                     {VISITOR_IDEA_PROMPTS.map((starter) => (
                       <button
@@ -326,7 +347,7 @@ export function MobileVisitorSheet({
                   onSelect={setSelectedOrnament}
                 />
                 <p className="anonymity-note">
-                  100% anonymous · No sign-in · Private to @{activeHandle}
+                  100% anonymous · No sign-in · Sealed for @{activeHandle}
                 </p>
               </form>
             )}
@@ -334,12 +355,12 @@ export function MobileVisitorSheet({
               <span className="credit-badge">
                 made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
               </span>
-              <span className="inline-flex items-center gap-2 text-[12px] opacity-80">
-                <Link href="/privacy" className="hover:underline">
+              <span className="footer-links-row">
+                <Link href="/privacy" className="footer-nav-link">
                   Privacy
                 </Link>
                 <span aria-hidden="true">·</span>
-                <Link href="/terms" className="hover:underline">
+                <Link href="/terms" className="footer-nav-link">
                   Terms
                 </Link>
               </span>

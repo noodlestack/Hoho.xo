@@ -147,6 +147,33 @@ export class FileTreeStore implements TreeStore {
     });
   }
 
+  async updateAuth(
+    handle: string,
+    patch: { ownerTokenHash?: string; passwordHash?: string },
+  ): Promise<TreeMeta | null> {
+    const clean = parseHandle(handle);
+    if (!clean) return null;
+    return this.mutex.runExclusive(async () => {
+      const snap = await this.readSnapshot();
+      const existing = snap.trees[clean] ?? this.memoryTrees.get(clean);
+      if (!existing) return null;
+      const updated: StoredTreeRecord = {
+        ...existing,
+        ...(patch.ownerTokenHash !== undefined
+          ? { ownerTokenHash: patch.ownerTokenHash }
+          : {}),
+        ...(patch.passwordHash !== undefined
+          ? { passwordHash: patch.passwordHash }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      this.memoryTrees.set(clean, updated);
+      snap.trees[clean] = updated;
+      await this.writeSnapshot(snap);
+      return toTreeMeta(updated);
+    });
+  }
+
   async appendMessage(
     handle: string,
     input: AppendMessageInput,

@@ -4,6 +4,7 @@ import type { TreeConfig } from "../tree-config";
 export interface TreeMeta {
   handle: string;
   ownerTokenHash: string;
+  passwordHash?: string;
   config: TreeConfig;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +72,10 @@ export interface TreeStore {
   updateConfig(
     handle: string,
     nextConfig: TreeConfig,
+  ): Promise<TreeMeta | null>;
+  updateAuth(
+    handle: string,
+    patch: { ownerTokenHash?: string; passwordHash?: string },
   ): Promise<TreeMeta | null>;
   appendMessage(
     handle: string,

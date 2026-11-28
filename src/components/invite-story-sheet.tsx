@@ -51,7 +51,14 @@ export function InviteStorySheet({
     queueMicrotask(() => {
       if (!cancelled) setBusy(true);
     });
-    void renderInviteStoryCardDataUrl(treeUrl, theme, config, template, aspect)
+    void renderInviteStoryCardDataUrl(
+      treeUrl,
+      theme,
+      config,
+      template,
+      aspect,
+      2,
+    )
       .then((url) => {
         if (!cancelled) setPreviewUrl(url);
       })
@@ -88,11 +95,12 @@ export function InviteStorySheet({
           config,
           template,
           aspect,
+          2,
         ));
       const outcome = await shareOrDownloadPngDataUrl(
         dataUrl,
-        `hoho-xo-${config.handle}-${aspect}-${template}.png`,
-        `Send an anonymous note to @${config.handle}`,
+        `hoho-xo-${config.handle || "tree"}-${aspect}-${template}-uhd.png`,
+        `Send a holiday letter to @${config.handle}`,
         treeUrl,
       );
       onResult?.(outcome);
@@ -105,7 +113,9 @@ export function InviteStorySheet({
 
   async function handleExportReel() {
     setReelBusy(true);
-    setReelStatus("Recording 3s looping Story Reel...");
+    setReelStatus(
+      "Recording Full-HD 1080×1920 60fps Video Reel with holiday chimes...",
+    );
     try {
       const result = await exportInviteReelClip(
         treeUrl,
@@ -113,14 +123,16 @@ export function InviteStorySheet({
         config,
         template,
       );
-      if (result === "downloaded") {
-        setReelStatus("Downloaded 3s looping Reel (.webm).");
-      } else if (result === "unsupported") {
+      if (result.status === "downloaded") {
         setReelStatus(
-          "Video Reel recording is unavailable in this browser — export PNG above instead.",
+          `Downloaded Full-HD 1080×1920 60fps Video Reel (.${result.ext ?? "webm"}).`,
+        );
+      } else if (result.status === "unsupported") {
+        setReelStatus(
+          "Video recording is unavailable in this browser — export the 4K PNG above instead.",
         );
       } else {
-        setReelStatus("Could not record Reel clip.");
+        setReelStatus("Could not record video clip.");
       }
     } finally {
       setReelBusy(false);
@@ -144,10 +156,11 @@ export function InviteStorySheet({
           <div className="sheet-header">
             <div>
               <Drawer.Description className="sheet-eyebrow">
-                {activeFormat.width}×{activeFormat.height} IG / TikTok Share
+                {activeFormat.exportWidth}×{activeFormat.exportHeight} Ultra-HD
+                Image &amp; 1080p60 Video
               </Drawer.Description>
               <Drawer.Title className="sheet-title" id="invite-story-title">
-                Share to Story
+                Share &amp; Export
               </Drawer.Title>
             </div>
             <button
@@ -223,7 +236,7 @@ export function InviteStorySheet({
               >
                 <Image
                   src={previewUrl}
-                  alt={`${activeFormat.width} by ${activeFormat.height} ${template} invite preview`}
+                  alt={`${activeFormat.exportWidth} by ${activeFormat.exportHeight} ${template} invite preview`}
                   className="share-preview-img"
                   width={Math.round(activeFormat.width / 4)}
                   height={Math.round(activeFormat.height / 4)}
@@ -244,7 +257,7 @@ export function InviteStorySheet({
             <div className="message-reading-box">
               <p className="tree-meta-line">
                 {busy
-                  ? `Rendering ${activeFormat.width}×${activeFormat.height} card...`
+                  ? `Rendering ${activeFormat.exportWidth}×${activeFormat.exportHeight} Ultra-HD card...`
                   : "Preview unavailable."}
               </p>
             </div>
@@ -256,9 +269,9 @@ export function InviteStorySheet({
             </p>
           ) : (
             <p className="tree-meta-line">
-              {aspect === "story"
-                ? "Lower-middle band stays quiet so you can drop your Instagram or TikTok link sticker cleanly."
-                : `${activeFormat.label} export ready for Instagram Feed, carousel, or link-in-bio post.`}
+              High-contrast QR redirects directly to{" "}
+              <strong>{treeUrl.replace(/^https?:\/\//i, "")}</strong> so friends
+              can message you immediately.
             </p>
           )}
 
@@ -272,8 +285,8 @@ export function InviteStorySheet({
               <Share2 size={15} strokeWidth={2} aria-hidden="true" />
               <span>
                 {busy
-                  ? "Preparing..."
-                  : `Share / Save ${activeFormat.width}×${activeFormat.height}`}
+                  ? "Preparing 4K..."
+                  : `Export ${activeFormat.exportWidth}×${activeFormat.exportHeight} PNG`}
               </span>
             </button>
             <button
@@ -283,28 +296,11 @@ export function InviteStorySheet({
               onClick={() => void handleExportReel()}
             >
               <Film size={15} strokeWidth={2} aria-hidden="true" />
-              <span>{reelBusy ? "Recording..." : "3s Reel (.webm)"}</span>
+              <span>
+                {reelBusy ? "Recording 1080p..." : "Export 1080p60 Video"}
+              </span>
             </button>
           </div>
-
-          <details className="bio-guide-details">
-            <summary>How to post to IG Story / TikTok Bio</summary>
-            <ol>
-              <li>
-                Tap <strong>Copy</strong> on your tree link in Studio, then save
-                your favorite template above.
-              </li>
-              <li>
-                In Instagram Story, upload the PNG, tap the{" "}
-                <strong>Link sticker</strong>, and drop it into the lower quiet
-                zone.
-              </li>
-              <li>
-                On TikTok or X, paste your tree URL into your profile Bio and
-                pin the 3s Reel clip.
-              </li>
-            </ol>
-          </details>
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>

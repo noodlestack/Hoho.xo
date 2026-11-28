@@ -1,7 +1,14 @@
 "use client";
 
-import { Copy, Dices, KeyRound, Music, SkipForward } from "lucide-react";
-import type { FormEvent } from "react";
+import {
+  Dices,
+  ListMusic,
+  Lock,
+  LogOut,
+  Music,
+  SkipForward,
+} from "lucide-react";
+import { useState, type FormEvent } from "react";
 import type { StudioTab } from "@/components/hoho/experience-helpers";
 import type { ChristmasTrack } from "@/lib/sound";
 import {
@@ -23,23 +30,16 @@ export interface OwnerCustomizeTabsProps {
   musicPlaying: boolean;
   onToggleMusic: () => void;
   onNextTrack: () => void;
+  onOpenPlaylist: () => void;
   soundEnabled: boolean;
   onToggleSound: (enabled: boolean) => void;
-  handleDraft: string;
-  setHandleDraft: (next: string) => void;
-  commitHandleChange: (nextHandle: string) => Promise<void>;
-  hasInvalidHandleDraft: boolean;
-  hasPendingHandleChange: boolean;
-  pendingHandleSlug: string | null;
   onCycleOwnerPrompt: () => void;
-  ownerKey: string;
-  onCopyText: (text: string, label: string) => Promise<boolean>;
-  unlockDraft: string;
-  setUnlockDraft: (next: string) => void;
-  handleUnlockWithKey: (event: FormEvent) => Promise<void>;
+  hasPassword: boolean;
+  onUpdatePassword: (newPassword: string) => Promise<boolean>;
+  onLogout: () => Promise<void>;
 }
 
-/** Renders the owner Style (theme, topper, silhouette, scenery, music) and Prompt (identity, filter, access key) tabs. */
+/** Renders the owner Style (theme, topper, silhouette, scenery, playlist) and Settings (prompt, filters, password, sign-out) tabs. */
 export function OwnerCustomizeTabs({
   idPrefix = "owner-",
   studioTab,
@@ -50,21 +50,29 @@ export function OwnerCustomizeTabs({
   musicPlaying,
   onToggleMusic,
   onNextTrack,
+  onOpenPlaylist,
   soundEnabled,
   onToggleSound,
-  handleDraft,
-  setHandleDraft,
-  commitHandleChange,
-  hasInvalidHandleDraft,
-  hasPendingHandleChange,
-  pendingHandleSlug,
   onCycleOwnerPrompt,
-  ownerKey,
-  onCopyText,
-  unlockDraft,
-  setUnlockDraft,
-  handleUnlockWithKey,
+  hasPassword,
+  onUpdatePassword,
+  onLogout,
 }: OwnerCustomizeTabsProps) {
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPw, setSavingPw] = useState(false);
+
+  async function handleSavePassword(event: FormEvent) {
+    event.preventDefault();
+    if (savingPw || newPassword.trim().length < 6) return;
+    setSavingPw(true);
+    try {
+      const ok = await onUpdatePassword(newPassword);
+      if (ok) setNewPassword("");
+    } finally {
+      setSavingPw(false);
+    }
+  }
+
   if (studioTab === "style") {
     return (
       <div className="edit-stack">
@@ -87,7 +95,12 @@ export function OwnerCustomizeTabs({
               >
                 <span
                   className="theme-dot"
-                  style={{ backgroundColor: item.swatch }}
+                  style={
+                    {
+                      "--swatch-color": item.swatch,
+                      backgroundColor: item.swatch,
+                    } as React.CSSProperties
+                  }
                   aria-hidden="true"
                 />
                 <span>{item.label}</span>
@@ -162,10 +175,16 @@ export function OwnerCustomizeTabs({
           </div>
         </div>
 
-        <div>
-          <span className="section-label">
-            Christmas Music Box · {currentTrack.title}
-          </span>
+        <div className="playlist-studio-box">
+          <div className="prompt-header-row">
+            <span className="section-label m-0">
+              Christmas Playlist · {currentTrack.title}
+            </span>
+            <button type="button" className="dice-btn" onClick={onOpenPlaylist}>
+              <ListMusic size={14} strokeWidth={2} aria-hidden="true" />
+              <span>All 10 songs</span>
+            </button>
+          </div>
           <div className="music-box-controls">
             <button
               type="button"
@@ -174,7 +193,7 @@ export function OwnerCustomizeTabs({
               onClick={onToggleMusic}
             >
               <Music size={14} strokeWidth={2} aria-hidden="true" />
-              <span>{musicPlaying ? "Pause Carol" : "Play Carol"}</span>
+              <span>{musicPlaying ? "Pause Song" : "Play Song"}</span>
             </button>
             <button
               type="button"
@@ -182,7 +201,7 @@ export function OwnerCustomizeTabs({
               onClick={onNextTrack}
             >
               <SkipForward size={14} strokeWidth={2} aria-hidden="true" />
-              <span>Next Carol</span>
+              <span>Next Song</span>
             </button>
           </div>
         </div>
@@ -268,47 +287,6 @@ export function OwnerCustomizeTabs({
       </div>
 
       <div className="edit-field">
-        <label htmlFor={`${idPrefix}handle-input`} className="section-label">
-          {activeHandle
-            ? `Tree handle (/t/${activeHandle})`
-            : "Choose your tree handle (/t/...)"}
-        </label>
-        <div className="url-row">
-          <input
-            id={`${idPrefix}handle-input`}
-            type="text"
-            className="social-input is-mono"
-            placeholder="e.g. santa_2026"
-            maxLength={21}
-            value={handleDraft}
-            onChange={(event) => setHandleDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void commitHandleChange(handleDraft);
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={() => void commitHandleChange(handleDraft)}
-          >
-            Set
-          </button>
-        </div>
-        {hasInvalidHandleDraft ? (
-          <p className="handle-pending-hint">
-            Handles use 3–20 letters, numbers, or underscores.
-          </p>
-        ) : hasPendingHandleChange && pendingHandleSlug ? (
-          <p className="handle-pending-hint">
-            Click Set to switch to @{pendingHandleSlug}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="edit-field">
         <label htmlFor={`${idPrefix}name-input`} className="section-label">
           Display name
         </label>
@@ -327,15 +305,16 @@ export function OwnerCustomizeTabs({
       <div className="edit-field">
         <div className="prompt-header-row">
           <label htmlFor={`${idPrefix}prompt-input`} className="section-label">
-            Bio question prompt
+            Greeting prompt for visitors
           </label>
           <button
             type="button"
             className="dice-btn"
+            aria-label="Randomize prompt"
             onClick={onCycleOwnerPrompt}
           >
             <Dices size={14} strokeWidth={2} aria-hidden="true" />
-            <span>Prompt</span>
+            <span>Randomize</span>
           </button>
         </div>
         <textarea
@@ -391,38 +370,44 @@ export function OwnerCustomizeTabs({
 
       <div className="key-box">
         <div className="prompt-header-row">
-          <span className="section-label m-0">Owner Access Key</span>
-          {ownerKey ? (
-            <button
-              type="button"
-              className="dice-btn"
-              onClick={() => void onCopyText(ownerKey, "Owner Access Key")}
-            >
-              <Copy size={13} strokeWidth={2} aria-hidden="true" />
-              <span>Copy Key</span>
-            </button>
-          ) : null}
+          <span className="section-label m-0">Account · @{activeHandle}</span>
+          <button
+            type="button"
+            className="dice-btn"
+            onClick={() => void onLogout()}
+          >
+            <LogOut size={13} strokeWidth={2} aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
         </div>
         <p className="tree-meta-line">
-          {ownerKey
-            ? "Save this now, it can't be shown again. Your session is protected by an HttpOnly cookie."
-            : "Enter the Owner Access Key for an existing handle to unlock Mail here."}
+          {hasPassword
+            ? "Update your password anytime to log in across devices."
+            : "Set a password so you can sign in easily without a secret key."}
         </p>
-        <form className="url-row" onSubmit={handleUnlockWithKey}>
-          <label htmlFor={`${idPrefix}unlock-key`} className="sr-only">
-            Owner Access Key
+        <form className="url-row" onSubmit={(e) => void handleSavePassword(e)}>
+          <label htmlFor={`${idPrefix}new-password`} className="sr-only">
+            New account password
           </label>
           <input
-            id={`${idPrefix}unlock-key`}
+            id={`${idPrefix}new-password`}
             type="password"
-            className="social-input is-mono"
-            placeholder="Paste key to unlock..."
-            value={unlockDraft}
-            onChange={(event) => setUnlockDraft(event.target.value)}
+            className="social-input"
+            placeholder={
+              hasPassword ? "New password (min 6 chars)" : "Set password..."
+            }
+            minLength={6}
+            maxLength={128}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
           />
-          <button type="submit" className="secondary-btn">
-            <KeyRound size={14} strokeWidth={2} aria-hidden="true" />
-            <span>Unlock</span>
+          <button
+            type="submit"
+            className="secondary-btn"
+            disabled={savingPw || newPassword.trim().length < 6}
+          >
+            <Lock size={14} strokeWidth={2} aria-hidden="true" />
+            <span>{savingPw ? "Saving..." : "Save"}</span>
           </button>
         </form>
       </div>

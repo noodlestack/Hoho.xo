@@ -265,10 +265,12 @@ describe("moderation normalization and classification", () => {
 });
 
 describe("Christmas music box and festive chime safety", () => {
-  it("exposes 4 public-domain holiday tracks with valid frequencies and beats", () => {
-    expect(CHRISTMAS_TRACKS).toHaveLength(4);
+  it("exposes 10 browser-verified holiday tracks with audio URLs and valid frequencies", () => {
+    expect(CHRISTMAS_TRACKS).toHaveLength(10);
     for (const track of CHRISTMAS_TRACKS) {
       expect(track.title.length).toBeGreaterThan(2);
+      expect(track.artist.length).toBeGreaterThan(2);
+      expect(track.audioUrl).toMatch(/^https:\/\/upload\.wikimedia\.org\//);
       expect(track.tempoBpm).toBeGreaterThanOrEqual(70);
       expect(track.notes.length).toBeGreaterThan(10);
       expect(track.notes.every(([freq, beats]) => freq >= 0 && beats > 0)).toBe(

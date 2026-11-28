@@ -1,9 +1,33 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const ROUTES = ["/", "/t/e2e_a11y", "/privacy", "/terms"] as const;
+const ROUTES = [
+  "/",
+  "/t/e2e_a11y",
+  "/t/missing_404_check",
+  "/privacy",
+  "/terms",
+] as const;
 
 test.describe("Hoho.xo accessibility checks", () => {
+  test.beforeAll(async ({ request }) => {
+    await request.post("/api/trees", {
+      headers: {
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+      },
+      data: {
+        handle: "e2e_a11y",
+        mode: "register",
+        password: "A11yTestPassword",
+        config: {
+          displayName: "A11y Tree",
+          prompt: "Send an accessible holiday letter",
+        },
+      },
+    });
+  });
+
   for (const route of ROUTES) {
     test(`${route} has zero serious or critical axe violations`, async ({
       page,

@@ -482,17 +482,17 @@
 .social-input {
   min-width: 0;
   flex: 1;
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 46px;
+  padding: 0 14px;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-md);
-  background: rgba(11, 13, 18, 0.8);
+  background: rgba(11, 13, 18, 0.84);
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 
 .social-input::placeholder {
-  color: var(--text-dim);
+  color: var(--text-faint);
 }
 
 .social-input:focus {
@@ -502,16 +502,16 @@
 
 .social-input.is-mono {
   font-family: var(--font-mono), monospace;
-  font-size: 0.72rem;
+  font-size: 0.94rem;
 }
 
 .section-label {
   display: block;
   margin: 0 0 8px;
-  color: var(--text-faint);
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }

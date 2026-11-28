@@ -15,18 +15,18 @@ export default function ErrorPage({
   }, [error]);
 
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center px-6 py-12 bg-[#0B0D12] text-[#F2EDE4] text-center">
-      <p className="text-xs uppercase tracking-[0.08em] text-[#E5484D] mb-2">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-[#0B0D12] px-6 py-12 text-center text-[#F2EDE4]">
+      <p className="mb-2 text-xs tracking-[0.08em] text-[#E5484D] uppercase">
         Hoho.xo · Unexpected Pause
       </p>
-      <h1 className="font-[family-name:var(--font-display)] text-4xl font-normal m-0 mb-3">
+      <h1 className="m-0 mb-3 font-[family-name:var(--font-display)] text-4xl font-normal">
         Something tripped on the lights.
       </h1>
-      <p className="text-sm text-[#9A968D] max-w-md mb-6">
+      <p className="mb-6 max-w-md text-sm text-[#9A968D]">
         Your saved notes and tree design remain intact in this browser. Try
         refreshing the view.
       </p>
-      <div className="flex flex-wrap gap-3 justify-center">
+      <div className="flex flex-wrap justify-center gap-3">
         <button type="button" className="primary-btn w-auto" onClick={reset}>
           Try again
         </button>

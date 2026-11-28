@@ -8,6 +8,7 @@ import {
   getOwnerTokenFromRequest,
   isStorageConfiguredForRuntime,
   RATE_LIMIT_POLICY,
+  setOwnerTreePassword,
   verifyTreeOwner,
 } from "@/lib/server-store";
 import { parseHandle } from "@/lib/tree-config";
@@ -58,37 +59,85 @@ export async function POST(request: Request) {
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
+
+  const cookieToken = getOwnerTokenFromRequest(request, handle);
+
+  // Clean, zero-409 session rehydration check on reload
+  if (payload.mode === "session") {
+    const verifiedOwner = await verifyTreeOwner(handle, cookieToken);
+    if (!verifiedOwner) {
+      return NextResponse.json(
+        { ok: false, authenticated: false, handle },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.json(
+      {
+        ok: true,
+        authenticated: true,
+        handle: verifiedOwner.handle,
+        created: false,
+        hasPassword: Boolean(verifiedOwner.passwordHash),
+        config: verifiedOwner.config,
+        messages: verifiedOwner.messages,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store",
+          ...(cookieToken
+            ? { "Set-Cookie": buildOwnerCookie(handle, cookieToken) }
+            : {}),
+        },
+      },
+    );
+  }
+
   const explicitKey =
     payload.ownerKey && payload.ownerKey.trim().length > 0
       ? payload.ownerKey.trim()
       : null;
-  const cookieToken = getOwnerTokenFromRequest(request, handle);
   const candidates = [explicitKey, cookieToken].filter(
     (value, idx, arr): value is string =>
       Boolean(value) && arr.indexOf(value) === idx,
   );
   const providedToken = candidates[0] ?? null;
 
-  // Fast path: returning verified owners skip the handle-claim rate limit so page reloads never hit 429
-  for (const candidateToken of candidates) {
-    const verifiedOwner = await verifyTreeOwner(handle, candidateToken);
-    if (verifiedOwner) {
-      return NextResponse.json(
-        {
-          ok: true,
-          handle: verifiedOwner.handle,
-          created: false,
-          config: verifiedOwner.config,
-          messages: verifiedOwner.messages,
-        },
-        {
-          status: 200,
-          headers: {
-            "Cache-Control": "no-store",
-            "Set-Cookie": buildOwnerCookie(handle, candidateToken),
+  // Fast path: returning verified owners skip the handle-claim rate limit (and can set/update password)
+  if (payload.mode !== "register" && payload.mode !== "login") {
+    for (const candidateToken of candidates) {
+      const verifiedOwner = await verifyTreeOwner(handle, candidateToken);
+      if (verifiedOwner) {
+        let activeCookie = candidateToken;
+        let hasPassword = Boolean(verifiedOwner.passwordHash);
+        if (payload.newPassword) {
+          const updatedPw = await setOwnerTreePassword(
+            handle,
+            payload.newPassword,
+          );
+          if (updatedPw) {
+            activeCookie = updatedPw.sessionToken;
+            hasPassword = true;
+          }
+        }
+        return NextResponse.json(
+          {
+            ok: true,
+            handle: verifiedOwner.handle,
+            created: false,
+            hasPassword,
+            config: verifiedOwner.config,
+            messages: verifiedOwner.messages,
           },
-        },
-      );
+          {
+            status: 200,
+            headers: {
+              "Cache-Control": "no-store",
+              "Set-Cookie": buildOwnerCookie(handle, activeCookie),
+            },
+          },
+        );
+      }
     }
   }
 
@@ -110,7 +159,8 @@ export async function POST(request: Request) {
           status: 503,
           headers: {
             "Retry-After": String(
-              limit.retryAfterSec ?? RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
+              limit.retryAfterSec ??
+                RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
             ),
             "Cache-Control": "no-store",
           },
@@ -118,7 +168,10 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json(
-      { ok: false, error: "Too many handle attempts. Try again shortly." },
+      {
+        ok: false,
+        error: "Too many login or claim attempts. Try again shortly.",
+      },
       {
         status: 429,
         headers: {
@@ -129,7 +182,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await claimOrVerifyTree(handle, providedToken, payload.config);
+  const result = await claimOrVerifyTree(
+    handle,
+    providedToken,
+    payload.config,
+    payload.mode || payload.password
+      ? { mode: payload.mode, password: payload.password }
+      : undefined,
+  );
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error },
@@ -137,7 +197,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const activeCookieToken = result.ownerToken ?? providedToken;
+  let activeCookieToken =
+    result.sessionToken ?? result.ownerToken ?? providedToken;
+  let hasPassword = result.hasPassword;
+
+  // Allow legacy owners logging in with their old key + a new password to upgrade to password login
+  if (!hasPassword && payload.newPassword) {
+    const upgraded = await setOwnerTreePassword(handle, payload.newPassword);
+    if (upgraded) {
+      activeCookieToken = upgraded.sessionToken;
+      hasPassword = true;
+    }
+  }
+
   const headers: Record<string, string> = { "Cache-Control": "no-store" };
   if (activeCookieToken) {
     headers["Set-Cookie"] = buildOwnerCookie(handle, activeCookieToken);
@@ -148,7 +220,10 @@ export async function POST(request: Request) {
       ok: true,
       handle: result.record.handle,
       created: result.created,
-      ...(result.ownerToken ? { ownerKey: result.ownerToken } : {}),
+      hasPassword,
+      ...(result.ownerToken && !payload.mode
+        ? { ownerKey: result.ownerToken }
+        : {}),
       config: result.record.config,
       messages: result.record.messages,
     },

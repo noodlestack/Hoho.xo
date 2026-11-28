@@ -76,31 +76,27 @@ export interface TreeConfig {
 }
 
 export const OWNER_PROMPT_PRESETS: string[] = [
-  "Send me an anonymous note before Christmas 🎄",
+  "Send me an anonymous holiday letter before Christmas 🎄",
   "One honest thing you never told me this year?",
-  "Paskong chika o confession—hang it on my tree.",
+  "Leave a Christmas wish, memory, or confession on my tree ✨",
   "What's your favorite memory with me in 2026?",
   "Drop a song, a wish, or a tiny truth anonymously.",
-  "Say it without signing your name. I'll answer on IG.",
-  "Anong wishlist mo para sa'kin bago mag-Dec 25?",
-  "Leave a little kindness or mild chaos on my tree ✨",
-  "Drop a quick 'Kamusta?' or honest note bago mag-New Year.",
-  "Bawal ma-shy — isang anonymous wish o confession lang 🎄",
-  "Sinong kanta ang pinaka-bagay sa'kin? Drop it anonymously.",
-  "Kung may isang bagay ka pang gustong sabihin sa'kin this 2026...",
-  "Rate our 2026 friendship or leave a Christmas chika ✨",
-  "No names, pure vibes lang — hang a note on my tree!",
+  "Write me a secret holiday letter — I'll unwrap it by the tree!",
+  "What's one thing you hope happens for us in the new year?",
+  "Leave a little kindness (or festive chaos) on my tree 🎁",
+  "Which holiday song reminds you of me? Drop it anonymously.",
+  "Say what's on your heart — sealed & anonymous until unwrapped.",
 ];
 
 export const VISITOR_IDEA_PROMPTS: string[] = [
   "I always smile whenever you...",
-  "My honest first impression of you was...",
+  "My favorite memory with you this year was...",
   "Before this year ends, I hope you know...",
-  "Thank you for that time when you...",
-  "Lowkey miss hanging out when we...",
-  "A song that reminds me of you is...",
-  "Wish ko lang sa'yo ngayong Pasko...",
-  "You probably didn't notice, but...",
+  "Thank you for always being the person who...",
+  "I lowkey miss hanging out when we...",
+  "A song that always reminds me of you is...",
+  "My biggest Christmas wish for you is...",
+  "You probably didn't realize it, but you really helped me when...",
 ];
 
 const CONFIG_STORAGE_PREFIX = "hoho_xo_config_v2";
@@ -164,6 +160,15 @@ export function saveActiveOwnerHandle(handle: string): void {
   if (!parsed) return;
   try {
     window.localStorage.setItem(ACTIVE_HANDLE_KEY, parsed);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function clearActiveOwnerHandle(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(ACTIVE_HANDLE_KEY);
   } catch {
     // Ignore storage errors
   }

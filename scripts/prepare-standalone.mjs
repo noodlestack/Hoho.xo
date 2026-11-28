@@ -9,10 +9,7 @@ if (!existsSync(serverPath) || !existsSync(staticDirectory)) {
   throw new Error("Production output is missing. Run `pnpm build` first.");
 }
 
-const standaloneStaticDirectory = resolve(
-  standaloneDirectory,
-  ".next/static",
-);
+const standaloneStaticDirectory = resolve(standaloneDirectory, ".next/static");
 mkdirSync(standaloneStaticDirectory, { recursive: true });
 cpSync(staticDirectory, standaloneStaticDirectory, { recursive: true });
 

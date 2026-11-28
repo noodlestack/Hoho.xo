@@ -5,8 +5,10 @@ export type StudioTab = "share" | "style" | "prompt";
 
 export interface ClaimApiResponse {
   ok?: boolean;
+  authenticated?: boolean;
   handle?: string;
   created?: boolean;
+  hasPassword?: boolean;
   ownerKey?: string;
   config?: TreeConfig;
   messages?: TreeMessage[];

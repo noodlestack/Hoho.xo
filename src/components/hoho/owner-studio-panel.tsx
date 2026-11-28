@@ -6,13 +6,13 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Mail,
+  LogOut,
+  MailOpen,
   QrCode,
   Share2,
   TreePine,
 } from "lucide-react";
 import Link from "next/link";
-import type { FormEvent } from "react";
 import type { CameraViewMode } from "@/components/ascii-tree-canvas";
 import {
   formatDisplayShareUrl,
@@ -27,18 +27,15 @@ import type { TreeConfig } from "@/lib/tree-config";
 interface OwnerStudioPanelProps {
   studioTab: StudioTab;
   setStudioTab: (tab: StudioTab) => void;
-  ownerClaimError: string;
   activeHandle: string;
   config: TreeConfig;
   updateConfig: (patch: Partial<TreeConfig>) => void;
   avatarGlyph: string;
   daysToChristmas: number | null;
-  serverSynced: boolean;
   shareUrl: string;
   visitorRelativeHref: string;
   copiedLink: boolean;
   onCopyLink: () => void;
-  onCopyText: (text: string, label: string) => Promise<boolean>;
   onOpenInviteSheet: () => void;
   viewMode: CameraViewMode;
   onToggleQrView: () => void;
@@ -55,37 +52,28 @@ interface OwnerStudioPanelProps {
   musicPlaying: boolean;
   onToggleMusic: () => void;
   onNextTrack: () => void;
+  onOpenPlaylist: () => void;
   soundEnabled: boolean;
   onToggleSound: (enabled: boolean) => void;
-  handleDraft: string;
-  setHandleDraft: (next: string) => void;
-  commitHandleChange: (nextHandle: string) => Promise<void>;
-  hasInvalidHandleDraft: boolean;
-  hasPendingHandleChange: boolean;
-  pendingHandleSlug: string | null;
   onCycleOwnerPrompt: () => void;
-  ownerKey: string;
-  unlockDraft: string;
-  setUnlockDraft: (next: string) => void;
-  handleUnlockWithKey: (event: FormEvent) => Promise<void>;
+  hasPassword: boolean;
+  onUpdatePassword: (newPassword: string) => Promise<boolean>;
+  onLogout: () => Promise<void>;
 }
 
-/** Desktop creator hub tabs for sharing, styling, and prompt/handle management. */
+/** Authenticated desktop creator hub tabs for sharing/exporting, styling, and account settings. */
 export function OwnerStudioPanel({
   studioTab,
   setStudioTab,
-  ownerClaimError,
   activeHandle,
   config,
   updateConfig,
   avatarGlyph,
   daysToChristmas,
-  serverSynced,
   shareUrl,
   visitorRelativeHref,
   copiedLink,
   onCopyLink,
-  onCopyText,
   onOpenInviteSheet,
   viewMode,
   onToggleQrView,
@@ -102,19 +90,13 @@ export function OwnerStudioPanel({
   musicPlaying,
   onToggleMusic,
   onNextTrack,
+  onOpenPlaylist,
   soundEnabled,
   onToggleSound,
-  handleDraft,
-  setHandleDraft,
-  commitHandleChange,
-  hasInvalidHandleDraft,
-  hasPendingHandleChange,
-  pendingHandleSlug,
   onCycleOwnerPrompt,
-  ownerKey,
-  unlockDraft,
-  setUnlockDraft,
-  handleUnlockWithKey,
+  hasPassword,
+  onUpdatePassword,
+  onLogout,
 }: OwnerStudioPanelProps) {
   return (
     <>
@@ -157,24 +139,9 @@ export function OwnerStudioPanel({
           className="studio-tab"
           onClick={() => setStudioTab("prompt")}
         >
-          Prompt
+          Settings
         </button>
       </div>
-
-      {ownerClaimError ? (
-        <div className="error-box" role="alert">
-          <span>{ownerClaimError}</span>
-          {studioTab !== "prompt" ? (
-            <button
-              type="button"
-              className="dice-btn mt-2"
-              onClick={() => setStudioTab("prompt")}
-            >
-              Open Handle &amp; Access Key →
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       {studioTab === "share" ? (
         <>
@@ -204,11 +171,20 @@ export function OwnerStudioPanel({
                       aria-hidden="true"
                     />
                     <span>
-                      {config.pauseInbox ? "Paused" : "Accepting notes"}
+                      {config.pauseInbox ? "Paused" : "Accepting letters"}
                     </span>
                   </span>
                 </p>
               </div>
+              <button
+                type="button"
+                className="account-signout-pill"
+                aria-label="Sign out or switch tree"
+                title="Sign out / Switch account"
+                onClick={() => void onLogout()}
+              >
+                <LogOut size={14} strokeWidth={2} aria-hidden="true" />
+              </button>
             </div>
             <p className="bio-prompt-text">{config.prompt}</p>
             {daysToChristmas !== null ? (
@@ -223,12 +199,11 @@ export function OwnerStudioPanel({
 
           <div className="share-row-wrap">
             <span className="section-label">
-              Your bio link ({serverSynced ? "short QR ready" : "portable link"}
-              )
+              Your personal letter link &amp; QR destination
             </span>
             <div className="share-link-pill">
               <span className="share-link-display" title={shareUrl}>
-                {formatDisplayShareUrl(shareUrl)}
+                {formatDisplayShareUrl(shareUrl, 40)}
               </span>
               <button
                 type="button"
@@ -238,7 +213,7 @@ export function OwnerStudioPanel({
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                aria-label={copiedLink ? "Copied bio link" : "Copy bio link"}
+                aria-label={copiedLink ? "Copied tree link" : "Copy tree link"}
                 onClick={onCopyLink}
               >
                 <span
@@ -270,7 +245,7 @@ export function OwnerStudioPanel({
               onClick={onOpenInviteSheet}
             >
               <Share2 size={15} strokeWidth={2} aria-hidden="true" />
-              <span>Share to Story</span>
+              <span>Export 4K Card &amp; HD Video</span>
             </button>
             <div className="share-secondary-row">
               <button
@@ -295,7 +270,7 @@ export function OwnerStudioPanel({
                 prefetch={false}
                 className="secondary-btn"
               >
-                <span>Preview</span>
+                <span>Preview Page</span>
                 <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
               </Link>
             </div>
@@ -336,41 +311,32 @@ export function OwnerStudioPanel({
               className="unread-spotlight-btn"
               onClick={() => onOpenMessage(newestUnread)}
             >
-              <Mail size={14} strokeWidth={2.1} aria-hidden="true" />
-              <span>Unwrap newest unread ({unreadCount})</span>
+              <MailOpen size={15} strokeWidth={2.1} aria-hidden="true" />
+              <span>Unfold newest unread letter ({unreadCount})</span>
             </button>
           ) : null}
 
           {messagesCount === 0 ? (
             <p className="share-empty-state">
-              Your tree is bare. Share your link and it fills up.
+              Share your QR or bio link — each friend&apos;s letter hangs on
+              your tree as a glowing ornament.
             </p>
           ) : (
             <div className="share-stats-row">
               <div className="share-stat-cell">
-                <span
-                  className="share-stat-value"
-                  data-count-value={visibleCount}
-                >
-                  {visibleCount}
-                </span>
+                <span className="share-stat-value">{visibleCount}</span>
                 <span className="share-stat-label">On tree</span>
               </div>
               <div className="share-stat-cell">
-                <span
-                  className="share-stat-value"
-                  data-count-value={messagesCount}
-                >
-                  {messagesCount}
-                </span>
-                <span className="share-stat-label">Total</span>
+                <span className="share-stat-value">{messagesCount}</span>
+                <span className="share-stat-label">Letters</span>
               </div>
               <div className="share-stat-cell">
                 <span className="share-stat-value">
                   {unreadCount > 0 ? (
                     <span className="unread-stat-dot" aria-hidden="true" />
                   ) : null}
-                  <span data-count-value={unreadCount}>{unreadCount}</span>
+                  <span>{unreadCount}</span>
                 </span>
                 <span className="share-stat-label">Unread</span>
               </div>
@@ -387,20 +353,13 @@ export function OwnerStudioPanel({
           musicPlaying={musicPlaying}
           onToggleMusic={onToggleMusic}
           onNextTrack={onNextTrack}
+          onOpenPlaylist={onOpenPlaylist}
           soundEnabled={soundEnabled}
           onToggleSound={onToggleSound}
-          handleDraft={handleDraft}
-          setHandleDraft={setHandleDraft}
-          commitHandleChange={commitHandleChange}
-          hasInvalidHandleDraft={hasInvalidHandleDraft}
-          hasPendingHandleChange={hasPendingHandleChange}
-          pendingHandleSlug={pendingHandleSlug}
           onCycleOwnerPrompt={onCycleOwnerPrompt}
-          ownerKey={ownerKey}
-          onCopyText={onCopyText}
-          unlockDraft={unlockDraft}
-          setUnlockDraft={setUnlockDraft}
-          handleUnlockWithKey={handleUnlockWithKey}
+          hasPassword={hasPassword}
+          onUpdatePassword={onUpdatePassword}
+          onLogout={onLogout}
         />
       )}
     </>

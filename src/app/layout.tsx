@@ -2,19 +2,19 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import {
   Caveat,
+  Figtree,
   Instrument_Serif,
   JetBrains_Mono,
-  Plus_Jakarta_Sans,
 } from "next/font/google";
 import { Toaster } from "sonner";
 import { SwRegister } from "@/components/sw-register";
 import { getSiteOriginString, getSiteOriginUrl } from "@/lib/site-origin";
 import "./globals.css";
 
-const sans = Plus_Jakarta_Sans({
+const sans = Figtree({
   variable: "--font-sans",
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 

@@ -29,7 +29,8 @@ function rateLimitDeniedResponse(
         status: 503,
         headers: {
           "Retry-After": String(
-            result.retryAfterSec ?? RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
+            result.retryAfterSec ??
+              RATE_LIMIT_POLICY.retryAfterOnUnavailableSec,
           ),
           "Cache-Control": "no-store",
         },
@@ -172,9 +173,14 @@ export async function POST(
   const bodyText = parsed.data.body;
   const ornamentType = parsed.data.ornamentType ?? null;
 
-  const result = await addAnonymousMessage(cleanHandle, bodyText, ornamentType, {
-    idempotencyKey,
-  });
+  const result = await addAnonymousMessage(
+    cleanHandle,
+    bodyText,
+    ornamentType,
+    {
+      idempotencyKey,
+    },
+  );
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error },

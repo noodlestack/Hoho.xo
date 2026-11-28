@@ -83,24 +83,38 @@ export function drawQrPlateAndOrnaments(
     cloudCount,
   } = p;
 
-  // 5. Seamless Dark-Canvas Scannable QR Plate
+  // 5. High-Contrast Scannable QR Plate (dark modules on warm ivory quiet-zone card)
   if (curMatrix.ok && qrMix > 0.04) {
     const quietModules = 4;
     const totalModules = curMatrix.size + quietModules * 2;
     const modulePx = qrBoxSide / totalModules;
-    const footerH = Math.round(qrBoxSide * 0.16);
+    const footerH = Math.round(qrBoxSide * 0.19);
     const cardH = qrBoxSide + footerH;
     const qrLeft = stageCenterX - qrBoxSide / 2;
     const qrTop = stageCenterY - cardH / 2;
 
     ctx.save();
-    ctx.globalAlpha = Math.min(1, qrMix * 1.25);
-    ctx.fillStyle = curTheme.qrBg;
-    ctx.fillRect(qrLeft, qrTop, qrBoxSide, cardH);
+    const cardAlpha = Math.min(1, qrMix * 1.25);
+    ctx.globalAlpha = cardAlpha;
 
-    ctx.strokeStyle = "#232834";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(qrLeft, qrTop, qrBoxSide, cardH);
+    // Soft outer ambient shadow + themed accent frame
+    ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetY = 12;
+    ctx.fillStyle = "#FAF6EE";
+    ctx.beginPath();
+    ctx.roundRect(qrLeft, qrTop, qrBoxSide, cardH, 20);
+    ctx.fill();
+
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    ctx.strokeStyle = curTheme.swatch;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(qrLeft, qrTop, qrBoxSide, cardH, 20);
+    ctx.stroke();
 
     const n = curMatrix.size;
     const halfN = (n - 1) / 2;
@@ -130,8 +144,9 @@ export function drawQrPlateAndOrnaments(
       }
       if (cellReveal <= 0.01) continue;
 
-      ctx.fillStyle = finder ? curTheme.qrFinder : curTheme.qrDark;
-      ctx.globalAlpha = cellReveal;
+      // Deep dark ink modules guarantee >14:1 contrast across iOS & Android cameras
+      ctx.fillStyle = finder ? "#0B1320" : "#111827";
+      ctx.globalAlpha = cardAlpha * cellReveal;
 
       const x0 = qrLeft + (column + quietModules) * modulePx;
       const y0 = qrTop + (row + quietModules) * modulePx;
@@ -154,27 +169,39 @@ export function drawQrPlateAndOrnaments(
       ctx.globalAlpha = captionFade;
       const stripY = qrTop + qrBoxSide;
 
-      ctx.strokeStyle = "#232834";
-      ctx.lineWidth = 1;
+      // Dark velvet footer band cleanly below the 4-module ivory quiet zone
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(qrLeft + 14, stripY);
-      ctx.lineTo(qrLeft + qrBoxSide - 14, stripY);
-      ctx.stroke();
+      ctx.roundRect(
+        qrLeft + 1.25,
+        stripY,
+        qrBoxSide - 2.5,
+        footerH - 1.25,
+        [0, 0, 18, 18],
+      );
+      ctx.fillStyle = "#111622";
+      ctx.fill();
+      ctx.restore();
 
-      ctx.fillStyle = "#F2EDE4";
-      ctx.font = `700 ${Math.max(10, Math.round(qrBoxSide * 0.04))}px ${fontFamily}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = curTheme.swatch;
+      ctx.font = `700 ${Math.max(11, Math.round(qrBoxSide * 0.044))}px ${fontFamily}`;
+      const labelHandle = curHandle ? `@${curHandle}` : "your_tree";
       ctx.fillText(
-        `hoho.xo · @${curHandle}`.slice(0, 28),
+        `hoho.xo/t/${labelHandle.replace(/^@/, "")}`.slice(0, 30),
         stageCenterX,
-        stripY + footerH * 0.36,
+        stripY + footerH * 0.38,
       );
 
-      ctx.fillStyle = "#9A968D";
-      ctx.font = `500 ${Math.max(8, Math.round(qrBoxSide * 0.03))}px ${fontFamily}`;
+      ctx.fillStyle = "#D6D1C7";
+      ctx.font = `600 ${Math.max(9, Math.round(qrBoxSide * 0.029))}px ${fontFamily}`;
       ctx.fillText(
-        "SCAN TO SEND AN ANONYMOUS NOTE",
+        curHandle
+          ? `SCAN TO MESSAGE ${labelHandle.toUpperCase()}`
+          : "CLAIM YOUR @HANDLE TO ACTIVATE QR",
         stageCenterX,
-        stripY + footerH * 0.72,
+        stripY + footerH * 0.74,
       );
     }
 

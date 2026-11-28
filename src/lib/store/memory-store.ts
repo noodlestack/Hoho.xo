@@ -21,6 +21,7 @@ export function toTreeMeta(record: StoredTreeRecord): TreeMeta {
   return {
     handle: record.handle,
     ownerTokenHash: record.ownerTokenHash,
+    ...(record.passwordHash ? { passwordHash: record.passwordHash } : {}),
     config: record.config,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -231,6 +232,30 @@ export class MemoryTreeStore implements TreeStore {
       const updated: StoredTreeRecord = {
         ...existing,
         config: { ...nextConfig, handle: clean },
+        updatedAt: new Date().toISOString(),
+      };
+      this.trees.set(clean, updated);
+      return toTreeMeta(updated);
+    });
+  }
+
+  async updateAuth(
+    handle: string,
+    patch: { ownerTokenHash?: string; passwordHash?: string },
+  ): Promise<TreeMeta | null> {
+    const clean = parseHandle(handle);
+    if (!clean) return null;
+    return this.mutex.runExclusive(async () => {
+      const existing = this.trees.get(clean);
+      if (!existing) return null;
+      const updated: StoredTreeRecord = {
+        ...existing,
+        ...(patch.ownerTokenHash !== undefined
+          ? { ownerTokenHash: patch.ownerTokenHash }
+          : {}),
+        ...(patch.passwordHash !== undefined
+          ? { passwordHash: patch.passwordHash }
+          : {}),
         updatedAt: new Date().toISOString(),
       };
       this.trees.set(clean, updated);

@@ -19,7 +19,8 @@ export const CRISIS_RESOURCES: {
     PH: [
       {
         label: "NCMH Crisis Hotline (Philippines)",
-        guidance: "Free 24/7 crisis support: call 1553 (Luzon) or 0917-899-8727.",
+        guidance:
+          "Free 24/7 crisis support: call 1553 (Luzon) or 0917-899-8727.",
         tel: "1553",
         url: "https://ncmh.gov.ph",
       },

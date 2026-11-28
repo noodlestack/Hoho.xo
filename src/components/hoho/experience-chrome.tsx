@@ -1,12 +1,21 @@
 "use client";
 
-import { ExternalLink, Mail, Music, Sparkles } from "lucide-react";
+import {
+  ExternalLink,
+  ListMusic,
+  LogIn,
+  Mail,
+  Music,
+  Pause,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import type { CameraViewMode } from "@/components/ascii-tree-canvas";
 import type { ChristmasTrack } from "@/lib/sound";
 
 interface NavChromeProps {
   isOwnerMode: boolean;
+  isAuthenticated: boolean;
   visitorRelativeHref: string;
   messagesCount: number;
   unreadCount: number;
@@ -14,35 +23,59 @@ interface NavChromeProps {
   musicPlaying: boolean;
   currentTrack: ChristmasTrack;
   onToggleMusic: () => void;
+  onOpenPlaylist: () => void;
   onOpenMail: () => void;
+  onOpenMobileAuth?: () => void;
 }
 
-function MusicPillButton({
+function MusicPillGroup({
   musicPlaying,
   currentTrack,
   onToggleMusic,
-}: Pick<NavChromeProps, "musicPlaying" | "currentTrack" | "onToggleMusic">) {
+  onOpenPlaylist,
+}: Pick<
+  NavChromeProps,
+  "musicPlaying" | "currentTrack" | "onToggleMusic" | "onOpenPlaylist"
+>) {
   return (
-    <button
-      type="button"
-      className={["audio-pill-btn", musicPlaying ? "is-playing" : ""]
-        .filter(Boolean)
-        .join(" ")}
-      aria-pressed={musicPlaying}
-      aria-label={
-        musicPlaying
-          ? `Pause ${currentTrack.title}`
-          : "Play Christmas music box"
-      }
-      title={
-        musicPlaying
-          ? `Playing: ${currentTrack.title}`
-          : "Play Christmas music box"
-      }
-      onClick={onToggleMusic}
-    >
-      <Music size={15} strokeWidth={2.2} aria-hidden="true" />
-    </button>
+    <div className="music-pill-cluster" role="group" aria-label="Holiday music">
+      <button
+        type="button"
+        className={["audio-pill-btn", musicPlaying ? "is-playing" : ""]
+          .filter(Boolean)
+          .join(" ")}
+        aria-pressed={musicPlaying}
+        aria-label={
+          musicPlaying
+            ? `Pause ${currentTrack.title}`
+            : `Play ${currentTrack.title}`
+        }
+        title={
+          musicPlaying
+            ? `Playing: ${currentTrack.title}`
+            : `Play: ${currentTrack.title}`
+        }
+        onClick={onToggleMusic}
+      >
+        {musicPlaying ? (
+          <Pause size={14} strokeWidth={2.3} aria-hidden="true" />
+        ) : (
+          <Music size={14} strokeWidth={2.2} aria-hidden="true" />
+        )}
+        <span className="audio-pill-title" data-hide-mobile="true">
+          {currentTrack.title}
+        </span>
+      </button>
+      <button
+        type="button"
+        className="playlist-trigger-btn"
+        aria-label="Open Christmas Playlist (10 songs)"
+        title="Open Christmas Playlist"
+        onClick={onOpenPlaylist}
+      >
+        <ListMusic size={15} strokeWidth={2.1} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -78,11 +111,12 @@ interface StageHeaderProps extends NavChromeProps {
   onChangeViewMode: (next: CameraViewMode) => void;
 }
 
-/** Top stage navigation bar with brand mark, camera mode tabs, and audio/navigation actions. */
+/** Top stage navigation bar with brand mark, camera mode tabs, playlist controls, and mail/auth actions. */
 export function StageHeader({
   viewMode,
   onChangeViewMode,
   isOwnerMode,
+  isAuthenticated,
   visitorRelativeHref,
   messagesCount,
   unreadCount,
@@ -90,7 +124,9 @@ export function StageHeader({
   musicPlaying,
   currentTrack,
   onToggleMusic,
+  onOpenPlaylist,
   onOpenMail,
+  onOpenMobileAuth,
 }: StageHeaderProps) {
   return (
     <header className="stage-header">
@@ -120,29 +156,41 @@ export function StageHeader({
         ))}
       </div>
       <div className="stage-header-actions">
-        <MusicPillButton
+        <MusicPillGroup
           musicPlaying={musicPlaying}
           currentTrack={currentTrack}
           onToggleMusic={onToggleMusic}
+          onOpenPlaylist={onOpenPlaylist}
         />
         {isOwnerMode ? (
-          <>
-            <Link
-              href={visitorRelativeHref}
-              prefetch={false}
+          isAuthenticated ? (
+            <>
+              <Link
+                href={visitorRelativeHref}
+                prefetch={false}
+                className="pill-nav-btn"
+                data-hide-mobile="true"
+              >
+                <span>Visitor</span>
+                <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
+              </Link>
+              <MailNavButton
+                messagesCount={messagesCount}
+                unreadCount={unreadCount}
+                unreadTickSeq={unreadTickSeq}
+                onOpenMail={onOpenMail}
+              />
+            </>
+          ) : onOpenMobileAuth ? (
+            <button
+              type="button"
               className="pill-nav-btn"
-              data-hide-mobile="true"
+              onClick={onOpenMobileAuth}
             >
-              <span>Visitor</span>
-              <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
-            </Link>
-            <MailNavButton
-              messagesCount={messagesCount}
-              unreadCount={unreadCount}
-              unreadTickSeq={unreadTickSeq}
-              onOpenMail={onOpenMail}
-            />
-          </>
+              <LogIn size={14} strokeWidth={2.1} aria-hidden="true" />
+              <span>Log In</span>
+            </button>
+          ) : null
         ) : (
           <Link href="/" className="make-tree-link">
             <span>Make yours</span>
@@ -154,9 +202,10 @@ export function StageHeader({
   );
 }
 
-/** Desktop right-column top action strip (music, visitor preview/make-yours, and Mail). */
+/** Desktop right-column top action strip (playlist player, visitor preview/make-yours, and Mail). */
 export function SidebarTopbar({
   isOwnerMode,
+  isAuthenticated,
   visitorRelativeHref,
   messagesCount,
   unreadCount,
@@ -164,32 +213,36 @@ export function SidebarTopbar({
   musicPlaying,
   currentTrack,
   onToggleMusic,
+  onOpenPlaylist,
   onOpenMail,
 }: NavChromeProps) {
   return (
     <div className="sidebar-topbar">
-      <MusicPillButton
+      <MusicPillGroup
         musicPlaying={musicPlaying}
         currentTrack={currentTrack}
         onToggleMusic={onToggleMusic}
+        onOpenPlaylist={onOpenPlaylist}
       />
       {isOwnerMode ? (
-        <>
-          <Link
-            href={visitorRelativeHref}
-            prefetch={false}
-            className="pill-nav-btn"
-          >
-            <span>Visitor</span>
-            <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
-          </Link>
-          <MailNavButton
-            messagesCount={messagesCount}
-            unreadCount={unreadCount}
-            unreadTickSeq={unreadTickSeq}
-            onOpenMail={onOpenMail}
-          />
-        </>
+        isAuthenticated ? (
+          <>
+            <Link
+              href={visitorRelativeHref}
+              prefetch={false}
+              className="pill-nav-btn"
+            >
+              <span>Visitor</span>
+              <ExternalLink size={13} strokeWidth={2.2} aria-hidden="true" />
+            </Link>
+            <MailNavButton
+              messagesCount={messagesCount}
+              unreadCount={unreadCount}
+              unreadTickSeq={unreadTickSeq}
+              onOpenMail={onOpenMail}
+            />
+          </>
+        ) : null
       ) : (
         <Link href="/" className="make-tree-link">
           <span>Make yours</span>
@@ -212,7 +265,7 @@ export function PanelFooter({ isOwnerMode, onOpenSupport }: PanelFooterProps) {
       <span className="credit-badge">
         made by <strong>noodlestack</strong> · <span>Hoho.xo</span>
       </span>
-      <span className="inline-flex items-center gap-2 text-[12px] opacity-80">
+      <span className="footer-links-row">
         {isOwnerMode ? (
           <>
             <button
@@ -225,11 +278,11 @@ export function PanelFooter({ isOwnerMode, onOpenSupport }: PanelFooterProps) {
             <span aria-hidden="true">·</span>
           </>
         ) : null}
-        <Link href="/privacy" className="hover:underline">
+        <Link href="/privacy" className="footer-nav-link">
           Privacy
         </Link>
         <span aria-hidden="true">·</span>
-        <Link href="/terms" className="hover:underline">
+        <Link href="/terms" className="footer-nav-link">
           Terms
         </Link>
       </span>

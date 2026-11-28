@@ -1,6 +1,10 @@
 export default function VisitorTreeLoading() {
   return (
-    <div className="hoho-app" aria-busy="true" aria-label="Loading Christmas tree">
+    <div
+      className="hoho-app"
+      aria-busy="true"
+      aria-label="Loading Christmas tree"
+    >
       <div className="stage-shell">
         <header className="stage-header">
           <div className="loading-shimmer loading-pill-sm" />

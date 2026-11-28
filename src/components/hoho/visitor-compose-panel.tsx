@@ -1,6 +1,6 @@
 "use client";
 
-import { Dices } from "lucide-react";
+import { Dices, Mail, Send } from "lucide-react";
 import Link from "next/link";
 import type {
   Dispatch,
@@ -13,7 +13,7 @@ import { writeVisitorDraft } from "@/components/hoho/experience-helpers";
 import { OrnamentPickerStrip } from "@/components/hoho/ornament-picker-strip";
 import { OrnamentSpriteIcon } from "@/components/ornament-sprite-icon";
 import type { TreeMessage } from "@/lib/messages";
-import type { TreeConfig } from "@/lib/tree-config";
+import { VISITOR_IDEA_PROMPTS, type TreeConfig } from "@/lib/tree-config";
 import type { OrnamentStyle, TreeTheme } from "@/lib/tree-themes";
 
 interface VisitorComposePanelProps {
@@ -43,7 +43,7 @@ interface VisitorComposePanelProps {
   onSubmit: (event: FormEvent) => Promise<void>;
 }
 
-/** Desktop visitor panel showing owner card, ornament count, pause banner, celebration state, and note composer. */
+/** Desktop visitor panel showing owner recipient card, clear guided composer, ornament picker, and envelope celebration. */
 export function VisitorComposePanel({
   activeHandle,
   config,
@@ -70,17 +70,21 @@ export function VisitorComposePanel({
   onVisitorDice,
   onSubmit,
 }: VisitorComposePanelProps) {
+  const recipientDisplay = config.displayName || `@${activeHandle}`;
+
   return (
     <>
       <div className="bio-hero-card">
+        <div className="visitor-eyebrow-pill">
+          <Mail size={13} strokeWidth={2.2} aria-hidden="true" />
+          <span>Send an anonymous holiday letter</span>
+        </div>
         <div className="bio-identity-row">
           <div className="avatar-ring" aria-hidden="true">
             {avatarGlyph}
           </div>
           <div className="bio-identity-text">
-            <p className="bio-name">
-              {config.displayName || `@${activeHandle}`}
-            </p>
+            <p className="bio-name">{recipientDisplay}</p>
             <p className="bio-handle-line">
               <span>@{activeHandle}</span>
               <span>·</span>
@@ -96,33 +100,33 @@ export function VisitorComposePanel({
                     .join(" ")}
                   aria-hidden="true"
                 />
-                <span>{config.pauseInbox ? "Paused" : "Active"}</span>
+                <span>{config.pauseInbox ? "Paused" : "Open"}</span>
               </span>
             </p>
           </div>
         </div>
         <p className="bio-prompt-text">{config.prompt}</p>
-        {daysToChristmas !== null ? (
-          <span className="countdown-pill">
-            🎄{" "}
-            {daysToChristmas === 0
-              ? "Merry Christmas!"
-              : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
+        <div className="visitor-meta-pills">
+          {daysToChristmas !== null ? (
+            <span className="countdown-pill">
+              🎄{" "}
+              {daysToChristmas === 0
+                ? "Merry Christmas!"
+                : `${daysToChristmas} ${daysToChristmas === 1 ? "day" : "days"} to Christmas`}
+            </span>
+          ) : null}
+          <span className="tree-count-pill">
+            {visibleCount} {visibleCount === 1 ? "letter" : "letters"} on tree
           </span>
-        ) : null}
+        </div>
       </div>
-
-      <p className="tree-meta-line">
-        {visibleCount} {visibleCount === 1 ? "ornament" : "ornaments"} hanging
-        on @{activeHandle}&apos;s tree
-      </p>
 
       {config.pauseInbox ? (
         <div className="paused-banner">
-          <strong>Inbox paused</strong>
-          <span>@{activeHandle} has paused new anonymous notes right now.</span>
+          <strong>Letterbox paused</strong>
+          <span>@{activeHandle} has paused new holiday letters right now.</span>
           <Link href="/" className="make-tree-link">
-            Make your own tree →
+            Plant your own tree →
           </Link>
         </div>
       ) : visitorSentOrnament ? (
@@ -146,11 +150,12 @@ export function VisitorComposePanel({
             Ornament hung on @{activeHandle}&apos;s tree!
           </p>
           <p className="anonymity-note">
-            Sent anonymously as a {sentOrnamentMeta?.name ?? "Bauble"}. Only @
-            {activeHandle} can unwrap it in Mail.
+            Your letter was sealed inside a{" "}
+            <strong>{sentOrnamentMeta?.name ?? "Bauble"}</strong> ornament. Only
+            @{activeHandle} can unfold and read it.
           </p>
           <Link href="/" className="primary-btn celebrate-hero-cta">
-            <span>Get your own tree →</span>
+            <span>Plant your own holiday tree →</span>
           </Link>
           <button
             type="button"
@@ -160,7 +165,7 @@ export function VisitorComposePanel({
               window.setTimeout(() => visitorInputRef.current?.focus(), 60);
             }}
           >
-            Send another
+            Write another letter
           </button>
         </div>
       ) : (
@@ -175,15 +180,15 @@ export function VisitorComposePanel({
             aria-hidden="true"
             className="honeypot-field"
           />
-          <label htmlFor="visitor-note-input" className="sr-only">
-            Send an anonymous note
+          <label htmlFor="visitor-note-input" className="section-label m-0">
+            1. Write your letter (100% anonymous)
           </label>
           <div className="compose-textarea-wrap">
             <textarea
               id="visitor-note-input"
               ref={visitorInputRef}
               className="compose-textarea"
-              placeholder="Send an anonymous note to hang on this tree..."
+              placeholder={`Dear ${recipientDisplay}, write a holiday wish, favorite memory, or secret note...`}
               maxLength={500}
               value={noteBody}
               onChange={(event) => {
@@ -208,7 +213,8 @@ export function VisitorComposePanel({
             <div className="compose-corner-bar">
               <button
                 type="button"
-                className="dice-btn"
+                className="dice-btn is-touch-pill"
+                aria-label="Insert a letter starter idea"
                 onClick={onVisitorDice}
               >
                 <Dices size={14} strokeWidth={2} aria-hidden="true" />
@@ -244,6 +250,25 @@ export function VisitorComposePanel({
             />
           </div>
 
+          <div className="prompt-chip-row" aria-label="Letter starter prompts">
+            {VISITOR_IDEA_PROMPTS.slice(0, 5).map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="prompt-chip"
+                onClick={() => {
+                  setNoteBody(starter);
+                  writeVisitorDraft(activeHandle, starter);
+                  composeSubmitKeyRef.current = null;
+                  if (submitError) setSubmitError("");
+                  visitorInputRef.current?.focus();
+                }}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+
           <OrnamentPickerStrip
             selectedOrnament={selectedOrnament}
             onSelect={setSelectedOrnament}
@@ -261,11 +286,14 @@ export function VisitorComposePanel({
             className="primary-btn"
             disabled={noteBody.trim().length === 0 || submittingNote}
           >
-            {submittingNote ? "Hanging ornament..." : "Send anonymous note"}
+            <Send size={15} strokeWidth={2.1} aria-hidden="true" />
+            <span>
+              {submittingNote ? "Sealing & hanging..." : "Send anonymous note"}
+            </span>
           </button>
 
           <p className="anonymity-note">
-            100% anonymous · No sign-in · Private to @{activeHandle}
+            No sign-in needed · Sealed in an envelope for @{activeHandle}
           </p>
         </form>
       )}

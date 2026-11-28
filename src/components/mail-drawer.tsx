@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCheck, Copy, Download, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CheckCheck, Copy, Download, Gift, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "vaul";
 import { OrnamentSpriteIcon } from "@/components/ornament-sprite-icon";
 import { formatRelativeTime, type TreeMessage } from "@/lib/messages";
@@ -13,6 +13,8 @@ interface MailDrawerProps {
   open: boolean;
   messages: TreeMessage[];
   activeOrnamentIds: Set<string>;
+  christmasLock?: boolean;
+  unwrappedIds?: Set<string>;
   onClose: () => void;
   onOpenMessage: (message: TreeMessage) => void;
   onCopyShareLink: () => void;
@@ -24,6 +26,8 @@ export function MailDrawer({
   open,
   messages,
   activeOrnamentIds,
+  christmasLock = false,
+  unwrappedIds,
   onClose,
   onOpenMessage,
   onCopyShareLink,
@@ -32,6 +36,24 @@ export function MailDrawer({
 }: MailDrawerProps) {
   const [filter, setFilter] = useState<MailFilter>("all");
   const [search, setSearch] = useState("");
+  const [beforeChristmas] = useState(
+    () => Date.now() < Date.parse("2026-12-25T00:00:00"),
+  );
+
+  const isLockedPreview = christmasLock && beforeChristmas;
+
+  // Ensure Escape closes the Mail drawer reliably (fixes OBS-09)
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   const unreadCount = useMemo(
     () => messages.filter((m) => !m.readAt && m.status === "visible").length,
@@ -68,10 +90,17 @@ export function MailDrawer({
         } else if (filter === "reported") {
           if (msg.status !== "reported") return false;
         }
-        if (q && !msg.body.toLowerCase().includes(q)) return false;
+        if (q) {
+          if (isLockedPreview && !unwrappedIds?.has(msg.id)) {
+            const ornamentName =
+              ORNAMENT_TYPES[msg.ornamentType]?.name.toLowerCase() ?? "";
+            return ornamentName.includes(q) || `#${msg.seq}`.includes(q);
+          }
+          if (!msg.body.toLowerCase().includes(q)) return false;
+        }
         return true;
       });
-  }, [messages, filter, search]);
+  }, [messages, filter, search, isLockedPreview, unwrappedIds]);
 
   return (
     <Drawer.Root
@@ -90,7 +119,7 @@ export function MailDrawer({
           <div className="sheet-header">
             <div>
               <Drawer.Description className="sheet-eyebrow">
-                Private Archive · {unreadCount} Unread
+                Private Letterbox · {unreadCount} Unread
               </Drawer.Description>
               <Drawer.Title className="sheet-title" id="mail-drawer-title">
                 Mail ({messages.length})
@@ -108,15 +137,15 @@ export function MailDrawer({
 
           <p className="tree-meta-line">
             {messages.length > 100
-              ? `${messages.length} total mails stored (${unreadCount} unread). The newest 100 visible notes hang as ornaments on the tree.`
+              ? `${messages.length} total letters stored (${unreadCount} unread). The newest 100 visible letters hang as ornaments on your tree.`
               : `${messages.length} total ${
-                  messages.length === 1 ? "mail" : "mails"
-                } (${unreadCount} unread). Up to 100 newest visible notes decorate the tree; Mail keeps every note.`}
+                  messages.length === 1 ? "letter" : "letters"
+                } (${unreadCount} unread). Tap any item below to unfold its envelope and read it like a letter.`}
           </p>
 
           <div className="flex flex-col gap-2">
             <label htmlFor="mail-search-input" className="sr-only">
-              Search Mail notes
+              Search Mail letters
             </label>
             <div className="mail-search-wrap">
               <Search
@@ -129,7 +158,11 @@ export function MailDrawer({
                 id="mail-search-input"
                 type="search"
                 className="social-input mail-search-input"
-                placeholder="Search notes..."
+                placeholder={
+                  isLockedPreview
+                    ? "Search by ornament or #number..."
+                    : "Search letters..."
+                }
                 maxLength={100}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -152,7 +185,12 @@ export function MailDrawer({
                   <button
                     type="button"
                     className="dice-btn mail-bulk-btn"
-                    disabled={messages.length === 0}
+                    disabled={messages.length === 0 || isLockedPreview}
+                    title={
+                      isLockedPreview
+                        ? "Unlock Wrap Dec 25 first to export full text"
+                        : undefined
+                    }
                     onClick={onExportKeepsake}
                   >
                     <Download size={14} strokeWidth={2} aria-hidden="true" />
@@ -188,7 +226,7 @@ export function MailDrawer({
                 aria-pressed={filter === "replied"}
                 onClick={() => setFilter("replied")}
               >
-                Replied ({repliedCount})
+                Shared ({repliedCount})
               </button>
               <button
                 type="button"
@@ -215,17 +253,17 @@ export function MailDrawer({
                 aria-hidden="true"
                 style={{ color: "#F5C451", fontSize: "1.4rem" }}
               >
-                *
+                ✦
               </span>
               <p className="m-0 text-sm text-[#F2EDE4]">
                 {messages.length === 0
-                  ? "Wala pang ornament. Ibahagi ang link mo."
-                  : "No notes match this filter."}
+                  ? "No holiday letters yet — share your QR or bio link!"
+                  : "No letters match this filter."}
               </p>
               <p className="tree-meta-line">
                 {messages.length === 0
-                  ? "Nothing here is seeded or faked. Every note comes from a real submission."
-                  : "Try clearing the search or switching tabs."}
+                  ? "Every ornament on your tree comes from a real anonymous letter sent by a friend."
+                  : "Try clearing your search or switching filter tabs."}
               </p>
               {messages.length === 0 && (
                 <button
@@ -280,7 +318,7 @@ export function MailDrawer({
                               fontWeight: 700,
                             }}
                           >
-                            · UNREAD
+                            · NEW
                           </span>
                         )}
                         {msg.starred && (
@@ -295,7 +333,7 @@ export function MailDrawer({
                         )}
                         {msg.repliedAt && (
                           <span style={{ color: "#8FD3FF", fontWeight: 700 }}>
-                            · REPLIED
+                            · SHARED
                           </span>
                         )}
                         {msg.status === "reported" && (
@@ -309,7 +347,19 @@ export function MailDrawer({
                       </span>
                       <span>{formatRelativeTime(msg.createdAt)}</span>
                     </div>
-                    <p className="mail-item-preview">{msg.body}</p>
+                    {isLockedPreview && !unwrappedIds?.has(msg.id) ? (
+                      <p className="mail-item-preview is-wrapped-preview">
+                        <Gift
+                          size={13}
+                          strokeWidth={2}
+                          style={{ display: "inline", marginRight: 6 }}
+                          aria-hidden="true"
+                        />
+                        Wrapped until Dec 25 — tap to view sealed envelope
+                      </p>
+                    ) : (
+                      <p className="mail-item-preview">{msg.body}</p>
+                    )}
                   </button>
                 );
               })}

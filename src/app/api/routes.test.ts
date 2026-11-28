@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as healthGet } from "./health/route";
-import { GET as mailGet, PATCH as mailPatch } from "./trees/[handle]/mail/route";
+import {
+  GET as mailGet,
+  PATCH as mailPatch,
+} from "./trees/[handle]/mail/route";
 import {
   DELETE as messageDelete,
   PATCH as messagePatch,
@@ -60,7 +63,9 @@ function ownerJsonRequest(
   return new Request(url, {
     method,
     headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    ...(options.body !== undefined
+      ? { body: JSON.stringify(options.body) }
+      : {}),
   });
 }
 
@@ -239,6 +244,96 @@ describe("Task 3.1 API route handler integration tests", () => {
     expect(delRes.status).toBe(200);
   });
 
+  it("supports password registration, multi-device password login, session check, and logout", async () => {
+    const regRes = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        body: {
+          handle: "holly_2026",
+          mode: "register",
+          password: "SnowflakePassword!",
+          config: { displayName: "Holly", prompt: "Send me a holiday letter!" },
+        },
+      }),
+    );
+    expect(regRes.status).toBe(201);
+    const regJson = (await regRes.json()) as {
+      ok: boolean;
+      created: boolean;
+      hasPassword: boolean;
+      config: { displayName: string; prompt: string };
+    };
+    expect(regJson.ok).toBe(true);
+    expect(regJson.created).toBe(true);
+    expect(regJson.hasPassword).toBe(true);
+    expect(regJson.config.prompt).toBe("Send me a holiday letter!");
+
+    const cookieA = extractCookiePair(regRes.headers.get("set-cookie"));
+
+    // Duplicate registration returns 409
+    const dupRes = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        body: {
+          handle: "holly_2026",
+          mode: "register",
+          password: "AnotherPassword!",
+        },
+      }),
+    );
+    expect(dupRes.status).toBe(409);
+
+    // Wrong password login returns 401
+    const badLogin = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        body: {
+          handle: "holly_2026",
+          mode: "login",
+          password: "wrong_password",
+        },
+      }),
+    );
+    expect(badLogin.status).toBe(401);
+
+    // Correct password login on a second device returns 200 & valid session cookie
+    const goodLogin = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        body: {
+          handle: "holly_2026",
+          mode: "login",
+          password: "SnowflakePassword!",
+        },
+      }),
+    );
+    expect(goodLogin.status).toBe(200);
+    const cookieB = extractCookiePair(goodLogin.headers.get("set-cookie"));
+
+    // Both cookies pass mode: "session" rehydration without 409
+    const sessA = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        cookie: cookieA,
+        body: { handle: "holly_2026", mode: "session" },
+      }),
+    );
+    expect(sessA.status).toBe(200);
+    expect(await sessA.json()).toMatchObject({
+      ok: true,
+      authenticated: true,
+      handle: "holly_2026",
+    });
+
+    const sessB = await treesPost(
+      ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
+        cookie: cookieB,
+        body: { handle: "holly_2026", mode: "session" },
+      }),
+    );
+    expect(sessB.status).toBe(200);
+    expect(await sessB.json()).toMatchObject({
+      ok: true,
+      authenticated: true,
+      handle: "holly_2026",
+    });
+  });
+
   it("enforces Origin and Content-Type on all owner mutating routes", async () => {
     const claimRes = await treesPost(
       ownerJsonRequest("http://localhost:3000/api/trees", "POST", {
@@ -336,7 +431,10 @@ describe("Task 3.1 API route handler integration tests", () => {
       new Request("http://localhost:3000/api/trees/ratetree/messages", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body: "Buy now", website: "http://bot.example" }),
+        body: JSON.stringify({
+          body: "Buy now",
+          website: "http://bot.example",
+        }),
       }),
       { params: Promise.resolve({ handle: "ratetree" }) },
     );
@@ -422,9 +520,9 @@ describe("Task 3.1 API route handler integration tests", () => {
       { params: Promise.resolve({ handle: "ratetree" }) },
     );
     expect(rateBlocked.status).toBe(429);
-    expect(Number(rateBlocked.headers.get("retry-after"))).toBeGreaterThanOrEqual(
-      1,
-    );
+    expect(
+      Number(rateBlocked.headers.get("retry-after")),
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("returns 503 fail-closed when KV errors and when production Vercel lacks KV", async () => {
@@ -501,14 +599,18 @@ describe("Task 3.1 API route handler integration tests", () => {
     expect(unauthGet.status).toBe(401);
 
     const foreignPost = await pushPost(
-      ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "POST", {
-        origin: "https://evil.example.com",
-        cookie: ownerCookie,
-        body: {
-          endpoint: "https://push.example.org/sub/1",
-          keys: { p256dh: "p256dh_key_1", auth: "auth_key_1" },
+      ownerJsonRequest(
+        "http://localhost:3000/api/trees/pushtree/push",
+        "POST",
+        {
+          origin: "https://evil.example.com",
+          cookie: ownerCookie,
+          body: {
+            endpoint: "https://push.example.org/sub/1",
+            keys: { p256dh: "p256dh_key_1", auth: "auth_key_1" },
+          },
         },
-      }),
+      ),
       { params: Promise.resolve({ handle: "pushtree" }) },
     );
     expect(foreignPost.status).toBe(403);
@@ -516,13 +618,17 @@ describe("Task 3.1 API route handler integration tests", () => {
     // Subscribe 6 devices -> capped cleanly at 5 newest
     for (let i = 1; i <= 6; i += 1) {
       const subRes = await pushPost(
-        ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "POST", {
-          cookie: ownerCookie,
-          body: {
-            endpoint: `https://push.example.org/sub/${i}`,
-            keys: { p256dh: `p256dh_key_${i}`, auth: `auth_key_${i}` },
+        ownerJsonRequest(
+          "http://localhost:3000/api/trees/pushtree/push",
+          "POST",
+          {
+            cookie: ownerCookie,
+            body: {
+              endpoint: `https://push.example.org/sub/${i}`,
+              keys: { p256dh: `p256dh_key_${i}`, auth: `auth_key_${i}` },
+            },
           },
-        }),
+        ),
         { params: Promise.resolve({ handle: "pushtree" }) },
       );
       expect(subRes.status).toBe(200);
@@ -537,7 +643,9 @@ describe("Task 3.1 API route handler integration tests", () => {
       { params: Promise.resolve({ handle: "pushtree" }) },
     );
     expect(listRes.status).toBe(200);
-    expect((await listRes.json()) as { count: number; subscribed: boolean }).toEqual({
+    expect(
+      (await listRes.json()) as { count: number; subscribed: boolean },
+    ).toEqual({
       ok: true,
       count: 5,
       subscribed: true,
@@ -577,13 +685,19 @@ describe("Task 3.1 API route handler integration tests", () => {
     }
 
     const delRes = await pushDelete(
-      ownerJsonRequest("http://localhost:3000/api/trees/pushtree/push", "DELETE", {
-        cookie: ownerCookie,
-        body: { endpoint: "https://push.example.org/sub/6" },
-      }),
+      ownerJsonRequest(
+        "http://localhost:3000/api/trees/pushtree/push",
+        "DELETE",
+        {
+          cookie: ownerCookie,
+          body: { endpoint: "https://push.example.org/sub/6" },
+        },
+      ),
       { params: Promise.resolve({ handle: "pushtree" }) },
     );
     expect(delRes.status).toBe(200);
-    expect((await delRes.json()) as { count: number }).toMatchObject({ count: 4 });
+    expect((await delRes.json()) as { count: number }).toMatchObject({
+      count: 4,
+    });
   });
 });

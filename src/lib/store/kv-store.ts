@@ -232,6 +232,28 @@ export class KvTreeStore implements TreeStore {
     return updated;
   }
 
+  async updateAuth(
+    handle: string,
+    patch: { ownerTokenHash?: string; passwordHash?: string },
+  ): Promise<TreeMeta | null> {
+    const clean = parseHandle(handle);
+    if (!clean) return null;
+    const existing = await this.getTree(clean);
+    if (!existing) return null;
+    const updated: TreeMeta = {
+      ...existing,
+      ...(patch.ownerTokenHash !== undefined
+        ? { ownerTokenHash: patch.ownerTokenHash }
+        : {}),
+      ...(patch.passwordHash !== undefined
+        ? { passwordHash: patch.passwordHash }
+        : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.exec(["SET", kTree(clean), JSON.stringify(updated)]);
+    return updated;
+  }
+
   async appendMessage(
     handle: string,
     input: AppendMessageInput,

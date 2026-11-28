@@ -201,8 +201,72 @@ export function hashOwnerToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-export function verifyOwnerToken(token: string, expectedHash: string): boolean {
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${derived}`;
+}
+
+export function verifyPassword(password: string, storedHash?: string): boolean {
+  if (!password || !storedHash || !storedHash.startsWith("scrypt:")) {
+    return false;
+  }
+  const parts = storedHash.split(":");
+  if (parts.length !== 3) return false;
+  const [, salt, expectedHex] = parts;
+  if (!salt || !expectedHex) return false;
+  try {
+    const derived = crypto.scryptSync(password, salt, 64);
+    const expected = Buffer.from(expectedHex, "hex");
+    if (derived.length === 0 || derived.length !== expected.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
+}
+
+function getSessionSigningSecret(): string {
+  const configured =
+    process.env.HOHO_SESSION_SECRET?.trim() || process.env.HOHO_IP_SALT?.trim();
+  if (configured) return configured;
+  return "hoho-xo-dev-session-secret";
+}
+
+export function deriveOwnerSessionToken(
+  handle: string,
+  ownerTokenHash: string,
+  passwordHash = "",
+): string {
+  const mac = crypto
+    .createHmac("sha256", getSessionSigningSecret())
+    .update(`session:${handle}:${ownerTokenHash}:${passwordHash}`)
+    .digest("hex");
+  return `sess_${mac}`;
+}
+
+export function verifyOwnerToken(
+  token: string,
+  expectedHash: string,
+  context?: { handle: string; passwordHash?: string },
+): boolean {
   if (!token || !expectedHash) return false;
+  if (token.startsWith("sess_") && context?.handle) {
+    try {
+      const expectedSess = deriveOwnerSessionToken(
+        context.handle,
+        expectedHash,
+        context.passwordHash ?? "",
+      );
+      const a = Buffer.from(token, "utf8");
+      const b = Buffer.from(expectedSess, "utf8");
+      if (a.length === 0 || a.length !== b.length) return false;
+      return crypto.timingSafeEqual(a, b);
+    } catch {
+      return false;
+    }
+  }
   try {
     const actualHash = hashOwnerToken(token);
     const a = Buffer.from(actualHash, "hex");
@@ -227,6 +291,12 @@ export function buildOwnerCookie(handle: string, token: string): string {
   const name = getOwnerCookieName(handle);
   const securePart = process.env.NODE_ENV === "production" ? "; Secure" : "";
   return `${name}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${securePart}`;
+}
+
+export function buildClearOwnerCookie(handle: string): string {
+  const name = getOwnerCookieName(handle);
+  const securePart = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${securePart}`;
 }
 
 export function getOwnerTokenFromRequest(
@@ -320,11 +390,6 @@ export function assertSameOrigin(
       if (reqOrigin === allowedOrigin) {
         return { ok: true };
       }
-      return {
-        ok: false,
-        status: 403,
-        error: "Cross-origin or invalid request.",
-      };
     } catch {
       // Fall through to request URL origin
     }
@@ -503,14 +568,20 @@ export async function claimOrVerifyTree(
   rawHandle: string,
   providedToken: string | null,
   initialConfig?: unknown,
+  authOptions?: {
+    mode?: "login" | "register";
+    password?: string;
+  },
 ): Promise<
   | {
       ok: true;
       created: boolean;
       ownerToken?: string;
+      sessionToken?: string;
+      hasPassword: boolean;
       record: StoredTreeRecord;
     }
-  | { ok: false; status: 400 | 409; error: string }
+  | { ok: false; status: 400 | 401 | 404 | 409; error: string }
 > {
   const handle = parseHandle(rawHandle);
   if (!handle) {
@@ -523,31 +594,135 @@ export async function claimOrVerifyTree(
 
   const store = getActiveTreeStore();
   const existing = await store.getTree(handle);
+  const mode = authOptions?.mode;
+  const password = authOptions?.password?.trim() ?? "";
+
+  if (mode === "login") {
+    if (!existing || existing.ownerTokenHash.length === 0) {
+      return {
+        ok: false,
+        status: 404,
+        error: `@${handle} was not found. Create your tree first!`,
+      };
+    }
+    if (!password && !providedToken) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Enter your password to log in.",
+      };
+    }
+
+    const passwordMatched =
+      Boolean(password) &&
+      Boolean(existing.passwordHash) &&
+      verifyPassword(password, existing.passwordHash);
+    const legacyKeyMatched =
+      !passwordMatched &&
+      Boolean(password || providedToken) &&
+      verifyOwnerToken(
+        password || providedToken || "",
+        existing.ownerTokenHash,
+        {
+          handle,
+          passwordHash: existing.passwordHash,
+        },
+      );
+
+    if (!passwordMatched && !legacyKeyMatched) {
+      return {
+        ok: false,
+        status: 401,
+        error: existing.passwordHash
+          ? "Incorrect password for this handle."
+          : "Incorrect password or legacy access key for this handle.",
+      };
+    }
+
+    const messages = await store.listMessages(handle);
+    const sessionToken = deriveOwnerSessionToken(
+      handle,
+      existing.ownerTokenHash,
+      existing.passwordHash ?? "",
+    );
+    return {
+      ok: true,
+      created: false,
+      sessionToken,
+      hasPassword: Boolean(existing.passwordHash),
+      record: { ...existing, messages },
+    };
+  }
 
   if (existing) {
+    if (mode === "register") {
+      return {
+        ok: false,
+        status: 409,
+        error: `@${handle} is already taken. Log in if this is your tree, or pick another handle.`,
+      };
+    }
     if (
       existing.ownerTokenHash.length > 0 &&
       providedToken &&
-      verifyOwnerToken(providedToken, existing.ownerTokenHash)
+      verifyOwnerToken(providedToken, existing.ownerTokenHash, {
+        handle,
+        passwordHash: existing.passwordHash,
+      })
     ) {
       const messages = await store.listMessages(handle);
-      return { ok: true, created: false, record: { ...existing, messages } };
+      return {
+        ok: true,
+        created: false,
+        hasPassword: Boolean(existing.passwordHash),
+        record: { ...existing, messages },
+      };
+    }
+    if (
+      existing.passwordHash &&
+      password &&
+      verifyPassword(password, existing.passwordHash)
+    ) {
+      const messages = await store.listMessages(handle);
+      const sessionToken = deriveOwnerSessionToken(
+        handle,
+        existing.ownerTokenHash,
+        existing.passwordHash,
+      );
+      return {
+        ok: true,
+        created: false,
+        sessionToken,
+        hasPassword: true,
+        record: { ...existing, messages },
+      };
     }
     return {
       ok: false,
       status: 409,
-      error:
-        "This handle is already claimed. Enter its Owner Access Key to unlock Mail.",
+      error: `@${handle} is already claimed. Log in with its password to manage this tree.`,
+    };
+  }
+
+  if (mode === "register" && password.length < 6) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Choose a password with at least 6 characters.",
     };
   }
 
   const now = new Date().toISOString();
   const ownerToken = generateOwnerToken();
+  const ownerTokenHash = hashOwnerToken(ownerToken);
+  const passwordHash =
+    password.length >= 6 ? hashPassword(password) : undefined;
   const baseCfg = defaultTreeConfig(handle);
   const config = sanitizeConfigPatch(initialConfig, baseCfg);
   const meta: TreeMeta = {
     handle,
-    ownerTokenHash: hashOwnerToken(ownerToken),
+    ownerTokenHash,
+    ...(passwordHash ? { passwordHash } : {}),
     config,
     createdAt: now,
     updatedAt: now,
@@ -560,25 +735,58 @@ export async function claimOrVerifyTree(
       raced &&
       raced.ownerTokenHash.length > 0 &&
       providedToken &&
-      verifyOwnerToken(providedToken, raced.ownerTokenHash)
+      verifyOwnerToken(providedToken, raced.ownerTokenHash, {
+        handle,
+        passwordHash: raced.passwordHash,
+      })
     ) {
       const messages = await store.listMessages(handle);
-      return { ok: true, created: false, record: { ...raced, messages } };
+      return {
+        ok: true,
+        created: false,
+        hasPassword: Boolean(raced.passwordHash),
+        record: { ...raced, messages },
+      };
     }
     return {
       ok: false,
       status: 409,
-      error:
-        "This handle is already claimed. Enter its Owner Access Key to unlock Mail.",
+      error: `@${handle} is already taken. Log in if this is your tree, or pick another handle.`,
     };
   }
+
+  const sessionToken = passwordHash
+    ? deriveOwnerSessionToken(handle, ownerTokenHash, passwordHash)
+    : undefined;
 
   return {
     ok: true,
     created: true,
     ownerToken,
+    sessionToken,
+    hasPassword: Boolean(passwordHash),
     record: { ...meta, messages: [] },
   };
+}
+
+export async function setOwnerTreePassword(
+  handle: string,
+  newPassword: string,
+): Promise<{ sessionToken: string; meta: TreeMeta } | null> {
+  const clean = parseHandle(handle);
+  if (!clean || newPassword.trim().length < 6) return null;
+  const store = getActiveTreeStore();
+  const existing = await store.getTree(clean);
+  if (!existing || existing.ownerTokenHash.length === 0) return null;
+  const passwordHash = hashPassword(newPassword.trim());
+  const updated = await store.updateAuth(clean, { passwordHash });
+  if (!updated) return null;
+  const sessionToken = deriveOwnerSessionToken(
+    clean,
+    updated.ownerTokenHash,
+    passwordHash,
+  );
+  return { sessionToken, meta: updated };
 }
 
 export async function verifyTreeOwner(
@@ -591,7 +799,12 @@ export async function verifyTreeOwner(
   if (!existing || existing.ownerTokenHash.length === 0) {
     return null;
   }
-  if (!verifyOwnerToken(providedToken, existing.ownerTokenHash)) {
+  if (
+    !verifyOwnerToken(providedToken, existing.ownerTokenHash, {
+      handle: existing.handle,
+      passwordHash: existing.passwordHash,
+    })
+  ) {
     return null;
   }
   const messages = await store.listMessages(handle);
@@ -780,7 +993,12 @@ export async function getOwnerMailSummary(
   if (!existing || existing.ownerTokenHash.length === 0) {
     return null;
   }
-  if (!verifyOwnerToken(providedToken, existing.ownerTokenHash)) {
+  if (
+    !verifyOwnerToken(providedToken, existing.ownerTokenHash, {
+      handle: existing.handle,
+      passwordHash: existing.passwordHash,
+    })
+  ) {
     return null;
   }
   return store.summary(handle);

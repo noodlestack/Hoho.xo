@@ -39,8 +39,23 @@ export const updateConfigSchema = z.object({
 
 export const claimTreeSchema = z.object({
   handle: z.string().trim().max(48).optional(),
+  mode: z.enum(["login", "register", "session"]).optional(),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters.")
+    .max(128)
+    .optional(),
+  newPassword: z
+    .string()
+    .min(6, "New password must be at least 6 characters.")
+    .max(128)
+    .optional(),
   ownerKey: z.string().max(128).nullable().optional(),
   config: updateConfigSchema.optional(),
+});
+
+export const logoutSchema = z.object({
+  handle: z.string().trim().min(1).max(48),
 });
 
 export const createMessageSchema = z.object({

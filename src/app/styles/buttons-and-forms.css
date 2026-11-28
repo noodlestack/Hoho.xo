@@ -243,14 +243,14 @@
 
 .edit-textarea {
   width: 100%;
-  min-height: 74px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
+  min-height: 78px;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
-  background: rgba(11, 13, 18, 0.8);
+  background: rgba(11, 13, 18, 0.84);
   color: var(--text);
-  font-size: 0.8rem;
-  line-height: 1.45;
+  font-size: 1rem;
+  line-height: 1.48;
   resize: vertical;
 }
 

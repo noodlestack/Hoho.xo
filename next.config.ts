@@ -8,8 +8,9 @@ const cspHeader = [
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
+  "media-src 'self' data: blob: https://upload.wikimedia.org",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://upload.wikimedia.org",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -20,6 +21,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   devIndicators: false,
+  htmlLimitedBots: /.*/,
   serverExternalPackages: ["web-push"],
   turbopack: {
     rules: {

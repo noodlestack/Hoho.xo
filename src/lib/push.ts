@@ -13,12 +13,11 @@ export const pushTransport = {
 let configuredPair: string | null = null;
 
 function ensureVapidConfigured(): boolean {
-  const publicKey =
-    (
-      process.env.VAPID_PUBLIC_KEY ||
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-      ""
-    ).trim();
+  const publicKey = (
+    process.env.VAPID_PUBLIC_KEY ||
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+    ""
+  ).trim();
   const privateKey = (process.env.VAPID_PRIVATE_KEY || "").trim();
   if (!publicKey || !privateKey) {
     return false;

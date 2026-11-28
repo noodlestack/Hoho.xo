@@ -2,23 +2,21 @@
 
 All notable changes to **Hoho.xo** are documented in this file following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — Polish, Craft, Accessibility & QA Hardening
+## [0.2.0] — 2026-11-28 · Holiday Letter Choreography, Account Login, 4K/1080p60 Exports & Playlist
 
 ### Added
 
-- **Vector Jewel Ornaments & 5-Point Star Topper**: Pre-rendered DPR-aware jewel ornament sprites (`src/lib/ornament-sprites.ts`) with `<OrnamentSpriteIcon />` UI thumbnails, `>= 24px` touch hit targets, and a glowing 5-point vector star topper with optional cosmetic Golden Star Supporter halo.
-- **Classic Palette & Adaptive Canvas Rendering**: Switched default palette to high-contrast Classic pine + warm gold + midnight, blue-noise Fibonacci foliage (`>= 85%` density), 120 atmosphere particles, and automatic quality-tier stepping (`high` → `medium` → `low`) with `?debug=1` HUD.
-- **Mail Inbox Filters, Handwriting & Swipe Deck**: Added 5 filter tabs (`All / Unread / Replied / Starred / Reported`), persisted `starred` and `repliedAt` flags, `Caveat` handwriting card toggle, GSAP `Flip` unwrap transition, pointer swipe deck navigation, and visibility-aware polling backoff.
-- **Expanded Story Studio**: Added 6 templates (`QR Forward`, `Big Prompt`, `Minimal`, `Polaroid`, `Receipt`, `Sticker`) across `9:16`, `4:5`, and `1:1` formats, Instagram Safe Zone overlay toggle, link-in-bio guide, and 3-second `.webm` Reel clip export.
-- **Ethical Owner Support Dialog**: Added optional Owner Studio `SupportSheet` (zero presence on `/t/[handle]`, zero message paywalls) with strict HTTPS link allowlisting and timing-safe `HOHO_SUPPORTER_CODES` unlock flow.
-- **PWA Offline Experience & QA Suite**: Added `public/offline.html`, static/push-only `public/sw.js` bypassing `/api/*`, Playwright E2E + `axe-core` accessibility + visual snapshot tests, ESLint `jsx-a11y`, Lighthouse CI budgets, `.nvmrc`, `CONTRIBUTING.md`, and GitHub issue/PR templates.
+- **Guided 2-Step Onboarding & Password Login**: Replaced raw hex access keys with a clean 2-step **Create My Tree / Log In** wizard (`OwnerOnboardingCard`), salted `scrypt` password hashing, multi-device HMAC `HttpOnly` sessions, zero-`409` session rehydration (`mode: "session"`), and `POST /api/auth/logout`.
+- **Ornament → Holiday Envelope → Unfolding Letter Animation**: Clicking any ornament animates the glowing decoration gathering into a North Pole airmail envelope stamped with a wax seal, popping open in 3D, and sliding out warm cream stationery letter paper (`Dear <Name>,` + serif/`Caveat` toggle + replay button).
+- **10-Track Browser-Sourced Christmas Playlist**: Added `ChristmasPlaylistSheet` streaming 10 public-domain & CC-BY classic holiday recordings from Wikimedia Commons (`Jingle Bells`, `Carol of the Bells`, `Silent Night`, `We Wish You a Merry Christmas`, `Deck the Halls`, `Dance of the Sugar Plum Fairy`, `O Holy Night`, `Joy to the World`, `Hark! The Herald Angels Sing`, `O Christmas Tree`) with seek bar, shuffle, repeat, volume control, and automatic Celesta Music Box offline fallback.
+- **Ultra-HD (4K) PNG & Full-HD (1080p60) Video Exports**: Upgraded Story/Post/Square cards to 2× supersampled 4K (`2160×3840`, `2160×2700`, `2160×2160`), QR exports to `2400×2832` UHD, and video reels + animated letter reveals to `1080×1920` `60fps` at `16 Mbps` (`.mp4` / `.webm`) with synthesized celesta chimes.
 
-### Changed
+### Fixed
 
-- **Modular Architecture (< 600 Lines)**: Split monolithic `globals.css`, `ascii-tree-canvas.tsx`, and `hoho-experience.tsx` into ordered partials under `src/app/styles/`, canvas renderers under `src/components/tree/`, and hooks/panels under `src/components/hoho/`.
-- **Exact Dependency Pins**: Pinned runtime and dev dependencies cleanly with verified `pnpm install --frozen-lockfile`.
+- **Direct `/t/[handle]` QR Redirects & High-Contrast Scannability**: Fixed QR generation so every live plate, standalone QR PNG, and Story badge encodes an absolute `https://.../t/[handle]` URL on a high-contrast warm ivory quiet-zone plate (`ECC-H`) for instant camera scanning.
+- **Next.js 16 Pre-Render 404 Guard (`src/proxy.ts`)**: Nonexistent or invalid `/t/[handle]` routes now return genuine HTTP `404` status codes instead of streaming `200` soft-404s.
+- **QA Polish**: Fixed stale reload prompt (`SplitText` DOM mutation), masked `Wrap Dec 25` previews in `MailDrawer`, bound `Escape` to close Mail, added scroll chevrons to `OrnamentPickerStrip`, upgraded UI typography to `Figtree` (`>= 16px` mobile inputs), and added per-tree OpenGraph/Twitter metadata.
 
-### Security & Privacy
+## [0.1.0] — Initial Release · 3D ASCII Tree, Jewel Ornaments & Privacy Hardening
 
-- Preserved strict visitor anonymity on SSR `/t/[handle]` and `GET /api/trees/[handle]`: zero message bodies, read/starred/replied flags, muted words, or sender metadata are ever exposed.
-- Enforced `HttpOnly` `__Host-` owner cookies, same-origin CSRF checks, fail-closed (`503`) Upstash KV rate limits, and static-only Service Worker caching (never caching `/api/*`).
+- Volumetric 3D ASCII Christmas tree canvas (`AsciiTreeCanvas`), 16 vector jewel ornament sprites, 10 color themes, private `HttpOnly` Mail inbox, 6 Story templates, PWA offline fallback, and VAPID Web Push notifications.
